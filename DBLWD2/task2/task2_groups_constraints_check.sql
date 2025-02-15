@@ -1,0 +1,5 @@
+INSERT INTO "GROUPS" (ID, NAME, C_VAL) 
+VALUES (group_id_seq.NEXTVAL, 'Group A', 15);
+
+INSERT INTO "GROUPS" (ID, NAME, C_VAL) 
+VALUES (1, 'Group D', 10);  

@@ -1,0 +1,2 @@
+INSERT INTO STUDENTS (ID, NAME, GROUP_ID) 
+VALUES (1, 'Student 4', 3);  

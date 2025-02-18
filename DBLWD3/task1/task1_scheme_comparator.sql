@@ -1,10 +1,12 @@
 CREATE OR REPLACE PROCEDURE compare_schemas(
     dev_schema_name  IN VARCHAR2,
     prod_schema_name IN VARCHAR2
-) AS
+) AUTHID CURRENT_USER AS
     TYPE table_list IS TABLE OF VARCHAR2(128);
     missing_tables table_list := table_list();
     altered_tables table_list := table_list();
+    tables_with_changes table_list := table_list(); 
+
     sorted_tables  table_list := table_list();
     
     CURSOR tbl_cursor IS
@@ -15,6 +17,18 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         SELECT table_name 
         FROM all_tables 
         WHERE owner = UPPER(prod_schema_name);
+        
+    CURSOR missing_columns_cursor IS
+        SELECT d.table_name, d.column_name, d.data_type, d.data_length
+        FROM all_tab_columns d
+        WHERE d.owner = UPPER(dev_schema_name)
+          AND d.table_name NOT IN (SELECT table_name FROM all_tables WHERE owner = UPPER(dev_schema_name) 
+                                   MINUS 
+                                   SELECT table_name FROM all_tables WHERE owner = UPPER(prod_schema_name))
+        MINUS
+        SELECT p.table_name, p.column_name, p.data_type, p.data_length
+        FROM all_tab_columns p
+        WHERE p.owner = UPPER(prod_schema_name);        
     
     CURSOR altered_cursor IS
         SELECT DISTINCT d.table_name, d.column_name, d.data_type, d.data_length, 
@@ -26,18 +40,6 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         WHERE d.owner = UPPER(dev_schema_name)
           AND p.owner = UPPER(prod_schema_name)
           AND (d.data_type != p.data_type OR d.data_length != p.data_length);
-    
-    CURSOR missing_columns_cursor IS
-        SELECT d.table_name, d.column_name, d.data_type, d.data_length
-        FROM all_tab_columns d
-        WHERE d.owner = UPPER(dev_schema_name)
-          AND d.table_name NOT IN (SELECT table_name FROM all_tables WHERE owner = UPPER(dev_schema_name) 
-                                   MINUS 
-                                   SELECT table_name FROM all_tables WHERE owner = UPPER(prod_schema_name))
-        MINUS
-        SELECT p.table_name, p.column_name, p.data_type, p.data_length
-        FROM all_tab_columns p
-        WHERE p.owner = UPPER(prod_schema_name);
 
     CURSOR fk_cursor IS
         SELECT a.table_name, c_pk.table_name AS referenced_table
@@ -75,64 +77,53 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     END topo_sort;
     
 BEGIN
-    DBMS_OUTPUT.PUT_LINE('===== НАЧАЛО СРАВНЕНИЯ =====');
     DBMS_OUTPUT.PUT_LINE('Сравнение схем: ' || UPPER(dev_schema_name) || ' vs ' || UPPER(prod_schema_name));
 
     DBMS_OUTPUT.PUT_LINE('Поиск отсутствующих таблиц...');
-    OPEN tbl_cursor;
-    LOOP
-        FETCH tbl_cursor INTO v_table_name;
-        EXIT WHEN tbl_cursor%NOTFOUND;
-        DBMS_OUTPUT.PUT_LINE('Найдена отсутствующая таблица: ' || v_table_name);
+    DBMS_OUTPUT.PUT_LINE('Проверка курсора tbl_cursor...' || tbl_cursor );
+
+    FOR rec IN tbl_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('Найдена отсутствующая таблица: ' || rec.table_name);
         missing_tables.EXTEND;
-        missing_tables(missing_tables.LAST) := v_table_name;
+        missing_tables(missing_tables.LAST) := rec.table_name;
     END LOOP;
-    CLOSE tbl_cursor;
 
     DBMS_OUTPUT.PUT_LINE('Поиск таблиц с изменённой структурой...');
-    OPEN altered_cursor;
-    LOOP
-        FETCH altered_cursor INTO v_table_name, v_column_name, v_data_type, v_data_length, v_prod_data_type, v_prod_data_length;
-        EXIT WHEN altered_cursor%NOTFOUND;
-        DBMS_OUTPUT.PUT_LINE('Изменена таблица: ' || v_table_name || ', колонка: ' || v_column_name || 
-                             ' (' || v_data_type || '(' || v_data_length || ') → ' || 
-                             v_prod_data_type || '(' || v_prod_data_length || '))');
+    FOR rec IN altered_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('Изменена таблица: ' || rec.table_name || ', колонка: ' || rec.column_name || 
+                             ' (' || rec.data_type || '(' || rec.data_length || ') → ' || 
+                             rec.prod_data_type || '(' || rec.prod_data_length || '))');
         altered_tables.EXTEND;
-        altered_tables(altered_tables.LAST) := v_table_name;
+        altered_tables(altered_tables.LAST) := rec.table_name;
+        tables_with_changes.EXTEND;
+        tables_with_changes(tables_with_changes.LAST) := rec.table_name;
     END LOOP;
-    CLOSE altered_cursor;
 
     DBMS_OUTPUT.PUT_LINE('Поиск отсутствующих колонок...');
-    OPEN missing_columns_cursor;
-    LOOP
-        FETCH missing_columns_cursor INTO v_table_name, v_column_name, v_data_type, v_data_length;
-        EXIT WHEN missing_columns_cursor%NOTFOUND;
-        DBMS_OUTPUT.PUT_LINE('В Prod отсутствует колонка: ' || v_table_name || '.' || v_column_name || 
-                             ' (' || v_data_type || '(' || v_data_length || '))');
+    FOR rec IN missing_columns_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('В Prod отсутствует колонка: ' || rec.table_name || '.' || rec.column_name || 
+                             ' (' || rec.data_type || '(' || rec.data_length || '))');
         altered_tables.EXTEND;
-        altered_tables(altered_tables.LAST) := v_table_name;
+        altered_tables(altered_tables.LAST) := rec.table_name;
+        tables_with_changes.EXTEND;
+        tables_with_changes(tables_with_changes.LAST) := rec.table_name;
     END LOOP;
-    CLOSE missing_columns_cursor;
 
     DBMS_OUTPUT.PUT_LINE('Поиск зависимостей между таблицами...');
-    OPEN fk_cursor;
-    LOOP
-        FETCH fk_cursor INTO v_table_name, v_ref_table;
-        EXIT WHEN fk_cursor%NOTFOUND;
-        DBMS_OUTPUT.PUT_LINE('Зависимость: ' || v_table_name || ' → ' || v_ref_table);
-        table_dependencies(v_table_name) := v_ref_table;
+    FOR rec IN fk_cursor LOOP
+        DBMS_OUTPUT.PUT_LINE('Зависимость: ' || rec.table_name || ' → ' || rec.referenced_table);
+        table_dependencies(rec.table_name) := rec.referenced_table;
     END LOOP;
-    CLOSE fk_cursor;
 
-    DBMS_OUTPUT.PUT_LINE('Выполняем топологическую сортировку...');
+    DBMS_OUTPUT.PUT_LINE('Топологическая сортировка...');
     FOR i IN 1..missing_tables.COUNT LOOP
         topo_sort(missing_tables(i));
+    END LOOP;   
+
+    FOR i IN 1..tables_with_changes.COUNT LOOP
+        topo_sort(tables_with_changes(i));
     END LOOP;
-    
-    FOR i IN 1..altered_tables.COUNT LOOP
-        topo_sort(altered_tables(i));
-    END LOOP;
-    
+
     DBMS_OUTPUT.PUT_LINE('=== Таблицы, отсутствующие в Prod ===');
     FOR i IN 1..missing_tables.COUNT LOOP
         DBMS_OUTPUT.PUT_LINE(missing_tables(i));
@@ -143,8 +134,13 @@ BEGIN
         DBMS_OUTPUT.PUT_LINE(altered_tables(i));
     END LOOP;
 
+    DBMS_OUTPUT.PUT_LINE('=== Таблицы с отсутствующими колонками ===');
+    FOR i IN 1..tables_with_changes.COUNT LOOP
+        DBMS_OUTPUT.PUT_LINE(tables_with_changes(i));
+    END LOOP;
+
     IF is_cycle THEN
-        DBMS_OUTPUT.PUT_LINE('Обнаружены закольцованные связи! Проверьте Foreign Keys.');
+        DBMS_OUTPUT.PUT_LINE('Обнаружены закольцованные связи!');
     ELSE
         DBMS_OUTPUT.PUT_LINE('=== Очередность создания таблиц ===');
         FOR i IN 1..sorted_tables.COUNT LOOP
@@ -152,6 +148,4 @@ BEGIN
         END LOOP;
     END IF;
 
-    DBMS_OUTPUT.PUT_LINE('===== СРАВНЕНИЕ ЗАВЕРШЕНО =====');
 END compare_schemas;
-

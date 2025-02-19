@@ -68,29 +68,29 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     ORDER BY a.table_name, referenced_table;
 
     CURSOR missing_object_cursor(
-        object_type VARCHAR2
+        obj_type VARCHAR2
     ) IS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = UPPER(object_type)
+        WHERE object_type = UPPER(obj_type)
             AND owner = UPPER(dev_schema_name)
         MINUS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = UPPER(object_type)
+        WHERE object_type = UPPER(obj_type)
         AND owner = UPPER(prod_schema_name);
 
     CURSOR common_object_cursor(
-        object_type VARCHAR2
+        obj_type VARCHAR2
     ) IS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = UPPER(object_type)
+        WHERE object_type = UPPER(obj_type)
             AND owner = UPPER(dev_schema_name)
         INTERSECT
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = UPPER(object_type)
+        WHERE object_type = UPPER(obj_type)
         AND owner = UPPER(prod_schema_name);
 
 ---------------------------------------------------------------------------------------
@@ -125,8 +125,8 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
 ------------
 
     FUNCTION compare_object_source(
-        object_name VARCHAR2, 
-        object_type VARCHAR2
+        obj_name VARCHAR2, 
+        obj_type VARCHAR2
     ) RETURN BOOLEAN IS
         dev_source   CLOB;
         prod_source  CLOB;
@@ -136,8 +136,8 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         ) IS
             SELECT LISTAGG(text, '') WITHIN GROUP (ORDER BY line) AS full_source
             FROM all_source
-            WHERE name = object_name
-            AND type = UPPER(object_type)
+            WHERE name = obj_name
+            AND type = UPPER(obj_type)
             AND owner = UPPER(schema_name);
         
     BEGIN
@@ -159,18 +159,21 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         WHEN OTHERS THEN
             RETURN FALSE;
     END compare_object_source;    
-
+    
 ------------
 
     PROCEDURE get_missing_objects(
-        object_type VARCHAR2,
+        obj_type VARCHAR2,
         collection IN OUT table_list,
         message VARCHAR2
     )
     IS
     BEGIN
-        FOR rec IN missing_object_cursor(object_type) LOOP
-            DBMS_OUTPUT.PUT_LINE(message || rec.object_name);
+        FOR rec IN missing_object_cursor(obj_type) LOOP
+            IF UPPER(obj_type) = 'INDEX' AND rec.object_name LIKE 'SYS%' THEN
+                CONTINUE;
+            END IF;    
+            DBMS_OUTPUT.PUT_LINE(message || rec.object_name );
             collection.EXTEND;
             collection(collection.LAST) := rec.object_name;
         END LOOP;
@@ -179,14 +182,14 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
 ------------                                                                        
 
     PROCEDURE get_alter_objects(
-        object_type VARCHAR2,
+        obj_type VARCHAR2,
         collection IN OUT table_list,
         message VARCHAR2
     )
     IS
     BEGIN
-        FOR rec IN common_object_cursor(object_type) LOOP
-            IF NOT compare_object_source(rec.object_name, object_type) THEN
+        FOR rec IN common_object_cursor(obj_type) LOOP
+            IF NOT compare_object_source(rec.object_name, obj_type) THEN
                 DBMS_OUTPUT.PUT_LINE(message || rec.object_name);
                 collection.EXTEND;
                 collection(collection.LAST) := rec.object_name;

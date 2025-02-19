@@ -8,6 +8,16 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     missing_tables table_list := table_list();
     tables_with_changes table_list := table_list();
 
+    functions_to_create_or_replace  table_list := table_list();
+    procedures_to_create_or_replace  table_list := table_list();
+    packages_to_create_or_replace  table_list := table_list();
+    indexes_to_create_or_replace  table_list := table_list();
+
+    functions_with_changes  table_list := table_list();
+    procedures_with_changes  table_list := table_list();
+    packages_with_changes  table_list := table_list();
+    indexes_with_changes  table_list := table_list();
+
     TYPE table_set IS TABLE OF BOOLEAN INDEX BY VARCHAR2(128);
     tables_with_changes_set table_set;
     visited table_set;
@@ -19,41 +29,10 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     
     is_cycle BOOLEAN := FALSE;
 
-    -- Коллекции для списков объектов
     TYPE object_list IS TABLE OF VARCHAR2(128);
     TYPE source_list IS TABLE OF CLOB;
 
-    -- Списки для функций
-    dev_functions  object_list := object_list();
-    prod_functions object_list := object_list();
-    missing_functions object_list := object_list();
-    changed_functions object_list := object_list();
-    
-    -- Списки для процедур
-    dev_procedures  object_list := object_list();
-    prod_procedures object_list := object_list();
-    missing_procedures object_list := object_list();
-    changed_procedures object_list := object_list();
-    
-    -- Списки для пакетов
-    dev_packages  object_list := object_list();
-    prod_packages object_list := object_list();
-    missing_packages object_list := object_list();
-    changed_packages object_list := object_list();
-    
-    -- Списки для индексов
-    dev_indexes  object_list := object_list();
-    prod_indexes object_list := object_list();
-    missing_indexes object_list := object_list();
-    changed_indexes object_list := object_list();
-
-    -- Коллекции для хранения исходного кода
-    dev_function_sources  source_list := source_list();
-    prod_function_sources source_list := source_list();
-    dev_procedure_sources source_list := source_list();
-    prod_procedure_sources source_list := source_list();
-    dev_package_sources   source_list := source_list();
-    prod_package_sources  source_list := source_list();
+--------------------------------------------------------------------------------------------------------------
 
     CURSOR tbl_cursor IS
         SELECT table_name 
@@ -88,70 +67,33 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
           AND a.table_name != c_pk.table_name  
     ORDER BY a.table_name, referenced_table;
 
-    -- Курсоры для функций
-    CURSOR function_cursor IS
+    CURSOR missing_object_cursor(
+        object_type VARCHAR2
+    ) IS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = 'FUNCTION'
-          AND owner = UPPER(dev_schema_name)
+        WHERE object_type = UPPER(object_type)
+            AND owner = UPPER(dev_schema_name)
         MINUS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = 'FUNCTION'
-          AND owner = UPPER(prod_schema_name);
+        WHERE object_type = UPPER(object_type)
+        AND owner = UPPER(prod_schema_name);
 
-    CURSOR function_source_cursor IS
-        SELECT name, text
-        FROM all_source
-        WHERE type = 'FUNCTION'
-          AND owner = UPPER(dev_schema_name)
-        ORDER BY line;
-
-    -- Курсоры для процедур
-    CURSOR procedure_cursor IS
-        SELECT object_name 
-        FROM all_procedures 
-        WHERE owner = UPPER(dev_schema_name)
-        MINUS
-        SELECT object_name 
-        FROM all_procedures 
-        WHERE owner = UPPER(prod_schema_name);
-
-    CURSOR procedure_source_cursor IS
-        SELECT name, text
-        FROM all_source
-        WHERE type = 'PROCEDURE'
-          AND owner = UPPER(dev_schema_name)
-        ORDER BY line;
-
-    -- Курсоры для пакетов
-    CURSOR package_cursor IS
+    CURSOR common_object_cursor(
+        object_type VARCHAR2
+    ) IS
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = 'PACKAGE'
-          AND owner = UPPER(dev_schema_name)
-        MINUS
+        WHERE object_type = UPPER(object_type)
+            AND owner = UPPER(dev_schema_name)
+        INTERSECT
         SELECT object_name 
         FROM all_objects 
-        WHERE object_type = 'PACKAGE'
-          AND owner = UPPER(prod_schema_name);
+        WHERE object_type = UPPER(object_type)
+        AND owner = UPPER(prod_schema_name);
 
-    CURSOR package_source_cursor IS
-        SELECT name, text
-        FROM all_source
-        WHERE type IN ('PACKAGE', 'PACKAGE BODY')
-          AND owner = UPPER(dev_schema_name)
-        ORDER BY name, type, line;
-
-    -- Курсоры для индексов
-    CURSOR index_cursor IS
-        SELECT index_name, table_name, index_type
-        FROM all_indexes 
-        WHERE owner = UPPER(dev_schema_name)
-        MINUS
-        SELECT index_name, table_name, index_type
-        FROM all_indexes 
-        WHERE owner = UPPER(prod_schema_name);
+---------------------------------------------------------------------------------------
 
     PROCEDURE topo_sort(tbl_name VARCHAR2) IS
         dep_table VARCHAR2(128);
@@ -179,7 +121,81 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         sorted_tables.EXTEND;
         sorted_tables(sorted_tables.LAST) := tbl_name;
     END topo_sort;
-    
+
+------------
+
+    FUNCTION compare_object_source(
+        object_name VARCHAR2, 
+        object_type VARCHAR2
+    ) RETURN BOOLEAN IS
+        dev_source   CLOB;
+        prod_source  CLOB;
+        
+        CURSOR source_cursor(
+            schema_name VARCHAR2
+        ) IS
+            SELECT LISTAGG(text, '') WITHIN GROUP (ORDER BY line) AS full_source
+            FROM all_source
+            WHERE name = object_name
+            AND type = UPPER(object_type)
+            AND owner = UPPER(schema_name);
+        
+    BEGIN
+
+        OPEN source_cursor(dev_schema_name);
+            FETCH source_cursor INTO dev_source;
+        CLOSE source_cursor;
+        
+        OPEN source_cursor(prod_schema_name);
+            FETCH source_cursor INTO prod_source;
+        CLOSE source_cursor;
+        
+        dev_source  := REGEXP_REPLACE(UPPER(dev_source), '\s+|--.*$', '', 1, 0, 'm');
+        prod_source := REGEXP_REPLACE(UPPER(prod_source), '\s+|--.*$', '', 1, 0, 'm');
+        
+        RETURN dev_source = prod_source;
+
+    EXCEPTION
+        WHEN OTHERS THEN
+            RETURN FALSE;
+    END compare_object_source;    
+
+------------
+
+    PROCEDURE get_missing_objects(
+        object_type VARCHAR2,
+        collection IN OUT table_list,
+        message VARCHAR2
+    )
+    IS
+    BEGIN
+        FOR rec IN missing_object_cursor(object_type) LOOP
+            DBMS_OUTPUT.PUT_LINE(message || rec.object_name);
+            collection.EXTEND;
+            collection(collection.LAST) := rec.object_name;
+        END LOOP;
+    END get_missing_objects;
+
+------------                                                                        
+
+    PROCEDURE get_alter_objects(
+        object_type VARCHAR2,
+        collection IN OUT table_list,
+        message VARCHAR2
+    )
+    IS
+    BEGIN
+        FOR rec IN common_object_cursor(object_type) LOOP
+            IF NOT compare_object_source(rec.object_name, object_type) THEN
+                DBMS_OUTPUT.PUT_LINE(message || rec.object_name);
+                collection.EXTEND;
+                collection(collection.LAST) := rec.object_name;
+            END IF;
+        END LOOP;
+    END get_alter_objects;
+
+
+--====================================================================================================        
 BEGIN
     DBMS_OUTPUT.PUT_LINE('Сравнение схем: ' || UPPER(dev_schema_name) || ' vs ' || UPPER(prod_schema_name));
 
@@ -228,6 +244,22 @@ BEGIN
         END;
     END LOOP;
 
+-------------------------------------------------------------------------------    
+
+    get_missing_objects('FUNCTION', functions_to_create_or_replace, 'Отсутствующая в prod функция: ');
+    get_missing_objects('PROCEDURE', procedures_to_create_or_replace, 'Отсутствующая в prod процедура: ');
+    get_missing_objects('PACKAGE', packages_to_create_or_replace, 'Отсутствующий в prod пакет: ');
+    get_missing_objects('INDEX', indexes_to_create_or_replace, 'Отсутствующий в prod индекс: ');
+
+-------------------------------------------------------------------------------
+
+    get_alter_objects('FUNCTION', functions_with_changes, 'Функция с отличной реализацией: ');
+    get_alter_objects('PROCEDURE', procedures_with_changes, 'Процедура с отличной реализацией: ');
+    get_alter_objects('PACKAGE', packages_with_changes, 'Пакет с отличной реализацией: ');
+    get_alter_objects('INDEX', indexes_with_changes, 'Индекс с отличной реализацией: ');
+
+----------------------------------------------------------------------------------------
+
     DBMS_OUTPUT.PUT_LINE('Топологическая сортировка...');
     FOR i IN 1..missing_tables.COUNT LOOP
         topo_sort(missing_tables(i));
@@ -237,41 +269,7 @@ BEGIN
         topo_sort(tables_with_changes(i));
     END LOOP;
 
-    -- Сравнение функций
-    FOR rec IN function_cursor LOOP
-        DBMS_OUTPUT.PUT_LINE('Найдена отсутствующая функция: ' || rec.object_name);
-        
-        missing_functions.EXTEND;
-        missing_functions(missing_functions.LAST) := rec.object_name;
 
-    END LOOP;
-
-    -- Сравнение процедур
-    FOR rec IN procedure_cursor LOOP
-        DBMS_OUTPUT.PUT_LINE('Найдена отсутствующая процедура: ' || rec.object_name);
-        
-        missing_procedures.EXTEND;
-        missing_procedures(missing_procedures.LAST) := rec.object_name;
-
-    END LOOP;
-
-    -- Сравнение пакетов
-    FOR rec IN package_cursor LOOP
-        DBMS_OUTPUT.PUT_LINE('Найден отсутствующий пакет: ' || rec.object_name);
-        
-        missing_packages.EXTEND;
-        missing_packages(missing_packages.LAST) := rec.object_name;
-
-    END LOOP;
-
-    -- Сравнение индексов
-    FOR rec IN index_cursor LOOP
-        DBMS_OUTPUT.PUT_LINE('Найден отсутствующий индекс: ' || rec.index_name);
-        
-        missing_indexes.EXTEND;
-        missing_indexes(missing_indexes.LAST) := rec.index_name;
-
-    END LOOP;
 
     IF is_cycle THEN
         DBMS_OUTPUT.PUT_LINE('Обнаружены закольцованные связи!');

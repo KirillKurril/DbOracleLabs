@@ -8,15 +8,10 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     missing_tables table_list := table_list();
     tables_with_changes table_list := table_list();
 
-    functions_to_create_or_replace  table_list := table_list();
-    procedures_to_create_or_replace  table_list := table_list();
-    packages_to_create_or_replace  table_list := table_list();
-    indexes_to_create_or_replace  table_list := table_list();
-
-    functions_with_changes  table_list := table_list();
-    procedures_with_changes  table_list := table_list();
-    packages_with_changes  table_list := table_list();
-    indexes_with_changes  table_list := table_list();
+    functions_to_add  table_list := table_list();
+    procedures_to_add  table_list := table_list();
+    packages_to_add  table_list := table_list();
+    indexes_to_add  table_list := table_list();
 
     TYPE table_set IS TABLE OF BOOLEAN INDEX BY VARCHAR2(128);
     tables_with_changes_set table_set;
@@ -249,17 +244,17 @@ BEGIN
 
 -------------------------------------------------------------------------------    
 
-    get_missing_objects('FUNCTION', functions_to_create_or_replace, 'Отсутствующая в prod функция: ');
-    get_missing_objects('PROCEDURE', procedures_to_create_or_replace, 'Отсутствующая в prod процедура: ');
-    get_missing_objects('PACKAGE', packages_to_create_or_replace, 'Отсутствующий в prod пакет: ');
-    get_missing_objects('INDEX', indexes_to_create_or_replace, 'Отсутствующий в prod индекс: ');
+    get_missing_objects('FUNCTION', functions_to_add, 'Отсутствующая в prod функция: ');
+    get_missing_objects('PROCEDURE', procedures_to_add, 'Отсутствующая в prod процедура: ');
+    get_missing_objects('PACKAGE', packages_to_add, 'Отсутствующий в prod пакет: ');
+    get_missing_objects('INDEX', indexes_to_add, 'Отсутствующий в prod индекс: ');
 
 -------------------------------------------------------------------------------
 
-    get_alter_objects('FUNCTION', functions_with_changes, 'Функция с отличной реализацией: ');
-    get_alter_objects('PROCEDURE', procedures_with_changes, 'Процедура с отличной реализацией: ');
-    get_alter_objects('PACKAGE', packages_with_changes, 'Пакет с отличной реализацией: ');
-    get_alter_objects('INDEX', indexes_with_changes, 'Индекс с отличной реализацией: ');
+    get_alter_objects('FUNCTION', functions_add, 'Функция с отличной реализацией: ');
+    get_alter_objects('PROCEDURE', procedures_add, 'Процедура с отличной реализацией: ');
+    get_alter_objects('PACKAGE', packages_add, 'Пакет с отличной реализацией: ');
+    get_alter_objects('INDEX', indexes_add, 'Индекс с отличной реализацией: ');
 
 ----------------------------------------------------------------------------------------
 

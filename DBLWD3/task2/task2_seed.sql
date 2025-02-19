@@ -30,7 +30,7 @@ END;
 
 CREATE OR REPLACE PROCEDURE C##DEV.update_salary(p_emp_id NUMBER, p_new_salary NUMBER) AS
 BEGIN
-    UPDATE C##DEV.EMPLOYEES SET salary = p_new_salary WHERE employee_id = p_emp_id;
+    UPDATE C##DEV.SALARIES SET salary = p_new_salary WHERE employee_id = p_emp_id;
 END;
 /
 
@@ -79,23 +79,23 @@ EXCEPTION
     WHEN OTHERS THEN NULL;
 END;
 /
-CREATE INDEX C##DEV.idx_employee_name ON C##DEV.EMPLOYEES (employee_id);
-/
+
+CREATE INDEX C##DEV.idx_employee_name ON C##DEV.EMPLOYEES (last_name, first_name);
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP INDEX C##DEV.idx_department_name';
+    EXECUTE IMMEDIATE 'DROP INDEX C##DEV.idx_employee_dept';
 EXCEPTION
     WHEN OTHERS THEN NULL;
 END;
 /
-CREATE INDEX C##DEV.idx_department_name ON C##DEV.DEPARTMENTS (department_id);
-/
+
+CREATE INDEX C##DEV.idx_employee_dept ON C##DEV.EMPLOYEES (department_id);
 
 BEGIN
-    EXECUTE IMMEDIATE 'DROP INDEX C##PROD.idx_department_name';
+    EXECUTE IMMEDIATE 'DROP INDEX C##PROD.idx_employee_name';
 EXCEPTION
     WHEN OTHERS THEN NULL;
 END;
 /
-CREATE INDEX C##PROD.idx_department_name ON C##PROD.DEPARTMENTS (department_id);
-/
+
+CREATE INDEX C##PROD.idx_employee_name ON C##PROD.EMPLOYEES (last_name);

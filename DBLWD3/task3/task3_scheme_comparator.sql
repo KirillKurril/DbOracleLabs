@@ -1,7 +1,7 @@
-CREATE OR REPLACE PROCEDURE compare_schemas(
+CREATE OR REPLACE FUNCTION compare_schemas(
     dev_schema_name  IN VARCHAR2,
     prod_schema_name IN VARCHAR2
-) AUTHID CURRENT_USER AS
+)RETURN CLOB AUTHID CURRENT_USER AS
 
     TYPE table_list IS TABLE OF VARCHAR2(128);
     sorted_tables  table_list := table_list();
@@ -24,8 +24,7 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
     
     is_cycle BOOLEAN := FALSE;
 
-    TYPE object_list IS TABLE OF VARCHAR2(128);
-    TYPE source_list IS TABLE OF CLOB;
+    ddl_output_script CLOB := EMPTY_CLOB();
 
 --------------------------------------------------------------------------------------------------------------
 
@@ -192,6 +191,225 @@ CREATE OR REPLACE PROCEDURE compare_schemas(
         END LOOP;
     END get_alter_objects;
 
+-----------
+
+    PROCEDURE get_ddl_for_object (
+        obj_name     IN VARCHAR2,
+        obj_type     IN VARCHAR2
+    ) AS
+        source_code CLOB:= EMPTY_CLOB();
+        ddl_script  CLOB:= EMPTY_CLOB();
+        name_entry_position NUMBER;
+    BEGIN
+        SELECT text
+        INTO source_code
+        FROM all_source
+        WHERE name = UPPER(obj_name) 
+            AND type = UPPER(obj_type)
+            AND owner = UPPER(dev_schema_name) 
+        ORDER BY line;
+
+        name_entry_position := INSTR(source_code, obj_name);
+
+        ddl_script := 'CREATE OR REPLACE ' || obj_type || ' C##PROD.' || obj_name;
+
+        ddl_script := ddl_script || SUBSTR(source_code,name_entry_position + LENGTH(obj_name) + 1) || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+
+        DBMS_OUTPUT.PUT_LINE(ddl_script);
+
+        ddl_output_script := ddl_output_script || ddl_script;
+
+            IF UPPER(obj_type) = 'PACKAGE' THEN
+                get_ddl_for_object(obj_name, 'PACKAGE BODY');
+            END IF;
+        
+    END get_ddl_for_object;
+
+-------------------------------------------------------------
+
+PROCEDURE get_ddl_for_index(
+    p_index_name IN VARCHAR2
+) AS
+    v_ddl_script CLOB := '';
+    v_table_name VARCHAR2(128);
+    v_column_list VARCHAR2(4000);
+    v_uniqueness VARCHAR2(10);
+    v_index_type VARCHAR2(20);
+    v_logging VARCHAR2(10);
+    v_compression VARCHAR2(10);
+BEGIN
+
+    SELECT 
+        table_name, 
+        uniqueness,
+        index_type,
+        logging,
+        compression
+    INTO 
+        v_table_name, 
+        v_uniqueness,
+        v_index_type,
+        v_logging,
+        v_compression
+    FROM all_indexes
+    WHERE index_name = UPPER(p_index_name)
+    AND owner = UPPER(dev_schema_name);
+
+    SELECT 
+        LISTAGG(column_name || DECODE(descend, 'DESC', ' DESC', ''), ', ')
+        WITHIN GROUP (ORDER BY column_position)
+    INTO v_column_list
+    FROM all_ind_columns
+    WHERE index_name = UPPER(p_index_name)
+    AND index_owner = UPPER(p_dev_schema);
+
+    v_ddl_script := 'DROP INDEX С##PROD.' || p_index_name || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+
+    v_ddl_script := v_ddl_script || 
+        'CREATE ' || 
+        CASE v_uniqueness 
+            WHEN 'UNIQUE' THEN 'UNIQUE ' 
+            ELSE '' 
+        END ||
+        'INDEX C##PROD.' || p_index_name || 
+        ' ON C##PROD.' || v_table_name || 
+        ' (' || v_column_list || ')' || CHR(13) || CHR(10);
+
+    IF v_logging = 'NO' THEN
+        v_ddl_script := v_ddl_script || 'NOLOGGING ' || CHR(13) || CHR(10);
+    END IF;
+
+    IF v_compression = 'ENABLED' THEN
+        v_ddl_script := v_ddl_script || 'COMPRESS ' || CHR(13) || CHR(10);
+    END IF;
+
+    DBMS_OUTPUT.PUT_LINE(v_ddl_script);
+    ddl_output_script := ddl_output_script || v_ddl_script;
+END get_ddl_for_index;
+
+-----------------------------------------------------------------------------
+
+PROCEDURE get_alter_table_ddl(
+    p_table_name VARCHAR2
+) AS
+    
+    CURSOR column_diff IS
+        SELECT 
+            d.column_name, 
+            d.data_type AS dev_type, 
+            d.data_length AS dev_length,
+            d.nullable AS dev_nullable,
+            p.data_type AS prod_type, 
+            p.data_length AS prod_length,
+            p.nullable AS prod_nullable
+        FROM 
+            all_tab_columns d
+        FULL OUTER JOIN 
+            all_tab_columns p 
+            ON (d.column_name = p.column_name 
+                AND p.owner = UPPER(prod_schema_name)
+                AND p.table_name = UPPER(p_table_name))
+        WHERE 
+            d.owner = UPPER(dev_schema_name)
+            AND d.table_name = UPPER(p_table_name)
+            AND (
+                p.column_name IS NULL OR 
+                d.data_type != p.data_type OR
+                d.data_length > p.data_length OR  
+                d.nullable != p.nullable  
+            );
+
+    v_alter_script CLOB := '';
+    v_recreate_needed BOOLEAN := FALSE;
+BEGIN
+    
+    FOR col IN column_diff LOOP
+        IF col.prod_type IS NULL THEN
+            v_alter_script := v_alter_script || 
+                'ALTER TABLE ' || prod_schema_name || '.' || p_table_name || 
+                ' ADD (' || col.column_name || ' ' || 
+                col.dev_type || 
+                CASE WHEN col.dev_length > 0 
+                     THEN '(' || col.dev_length || ')' 
+                     ELSE '' 
+                END ||
+                CASE WHEN col.dev_nullable = 'N' 
+                     THEN ' NOT NULL' 
+                     ELSE ' NULL' 
+                END || ');' || CHR(13) || CHR(10);
+        
+        ELSIF col.dev_type IN ('VARCHAR2', 'CHAR', 'NVARCHAR2') 
+              AND col.dev_length >= col.prod_length THEN
+            v_alter_script := v_alter_script || 
+                'ALTER TABLE ' || prod_schema_name || '.' || p_table_name || 
+                ' MODIFY (' || col.column_name || 
+                ' ' || col.dev_type || 
+                '(' || col.dev_length || '));' || CHR(13) || CHR(10);
+        
+        ELSIF col.dev_nullable != col.prod_nullable THEN
+            v_alter_script := v_alter_script || 
+                'ALTER TABLE ' || prod_schema_name || '.' || p_table_name || 
+                ' MODIFY (' || col.column_name || 
+                CASE WHEN col.dev_nullable = 'N' 
+                     THEN ' NOT NULL);' 
+                     ELSE ' NULL);' 
+                END || CHR(13) || CHR(10);
+        
+        ELSIF col.dev_type IN ('NUMBER', 'INTEGER', 'DECIMAL')
+              AND col.prod_type IN ('NUMBER', 'INTEGER', 'DECIMAL') THEN
+            v_alter_script := v_alter_script || 
+                'ALTER TABLE ' || prod_schema_name || '.' || p_table_name || 
+                ' MODIFY (' || col.column_name || 
+                ' ' || col.dev_type || 
+                CASE WHEN col.dev_length > 0 
+                     THEN '(' || col.dev_length || ')' 
+                     ELSE '' 
+                END || ');' || CHR(13) || CHR(10);
+        
+        ELSE
+            v_recreate_needed := TRUE;
+            EXIT;
+        END IF;
+    END LOOP;
+
+    IF v_recreate_needed THEN
+        get_table_ddl(p_table_name);
+    ELSE
+        ddl_output_script := ddl_output_script || v_alter_script || CHR(13) || CHR(10);
+        DBMS_OUTPUT.PUT_LINE(v_alter_script);
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ошибка при изменении таблицы: ' || SQLERRM);
+END compare_and_alter_table;
+
+--------------------------------------------------------
+
+PROCEDURE get_table_ddl(
+    p_table_name IN VARCHAR2
+) AS
+    v_ddl CLOB;
+BEGIN
+    DBMS_METADATA.SET_TRANSFORM_PARAM(
+        DBMS_METADATA.SESSION_TRANSFORM, 
+        'CONSTRAINTS', 
+        TRUE
+    );
+
+    v_ddl := 'DROP TABLE ' || prod_schema_name || '.' || p_table_name || ' CASCADE CONSTRAINTS;' || CHR(13) || CHR(10);
+    
+    v_ddl := v_ddl || REPLACE(
+        DBMS_METADATA.GET_DDL('TABLE', p_table_name, dev_schema_name), 
+        dev_schema_name, 
+        prod_schema_name
+    );
+    
+    DBMS_OUTPUT.PUT_LINE(v_ddl);
+    ddl_output_script := ddl_output_script || v_ddl || CHR(13) || CHR(10);
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ошибка: ' || p_table_name || ' - ' || SQLERRM);
+END;
 
 --====================================================================================================        
 BEGIN
@@ -251,10 +469,10 @@ BEGIN
 
 -------------------------------------------------------------------------------
 
-    get_alter_objects('FUNCTION', functions_add, 'Функция с отличной реализацией: ');
-    get_alter_objects('PROCEDURE', procedures_add, 'Процедура с отличной реализацией: ');
-    get_alter_objects('PACKAGE', packages_add, 'Пакет с отличной реализацией: ');
-    get_alter_objects('INDEX', indexes_add, 'Индекс с отличной реализацией: ');
+    get_alter_objects('FUNCTION', functions_to_add, 'Функция с отличной реализацией: ');
+    get_alter_objects('PROCEDURE', procedures_to_add, 'Процедура с отличной реализацией: ');
+    get_alter_objects('PACKAGE', packages_to_add, 'Пакет с отличной реализацией: ');
+    get_alter_objects('INDEX', indexes_to_add, 'Индекс с отличной реализацией: ');
 
 ----------------------------------------------------------------------------------------
 
@@ -271,11 +489,38 @@ BEGIN
 
     IF is_cycle THEN
         DBMS_OUTPUT.PUT_LINE('Обнаружены закольцованные связи!');
+        RETURN ddl_output_script;
     ELSE
         DBMS_OUTPUT.PUT_LINE('=== Очередность создания таблиц ===');
         FOR i IN 1..sorted_tables.COUNT LOOP
             DBMS_OUTPUT.PUT_LINE(sorted_tables(i));
         END LOOP;
     END IF;
+
+    FOR i IN 1..sorted_tables.COUNT LOOP
+        IF sorted_tables(i) MEMBER OF missing_tables THEN
+            get_table_ddl(sorted_tables(i));
+        ELSE
+            get_alter_table_ddl(sorted_tables(i));
+        END IF;
+    END LOOP;
+
+    FOR i IN 1..indexes_to_add.COUNT LOOP
+        get_ddl_for_index(indexes_to_add(i));
+    END LOOP;
+
+    FOR i IN 1..functions_to_add.COUNT LOOP
+        get_ddl_for_object(functions_to_add(i));
+    END LOOP;
+
+    FOR i IN 1..procedures_to_add.COUNT LOOP
+        get_ddl_for_object(procedures_to_add(i));
+    END LOOP;
+
+    FOR i IN 1..indexes_to_add.COUNT LOOP
+        get_ddl_for_object(indexes_to_add(i));
+    END LOOP;
+
+    RETURN ddl_output_script;
 
 END compare_schemas;

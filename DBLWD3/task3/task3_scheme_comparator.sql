@@ -87,6 +87,19 @@ CREATE OR REPLACE FUNCTION compare_schemas(
         WHERE object_type = UPPER(obj_type)
         AND owner = UPPER(prod_schema_name);
 
+    CURSOR objects_from_prod_to_drop IS
+        SELECT 
+            object_name, 
+            object_type
+        FROM all_objects
+        WHERE owner = UPPER(prod_schema_name)
+        MINUS
+        SELECT 
+            object_name, 
+            object_type
+        FROM all_objects
+        WHERE owner = UPPER(dev_schema_name);        
+
 ---------------------------------------------------------------------------------------
 
     PROCEDURE topo_sort(tbl_name VARCHAR2) IS
@@ -199,9 +212,13 @@ CREATE OR REPLACE FUNCTION compare_schemas(
     ) AS
         source_code CLOB:= EMPTY_CLOB();
         ddl_script  CLOB:= EMPTY_CLOB();
+
+        dev_schema_name_length NUMBER := LENGTH(dev_schema_name);
+        prod_schema_name_length NUMBER := LENGTH(prod_schema_name);        
+
         name_entry_position NUMBER;
     BEGIN
-        SELECT text
+        SELECT LISTAGG(text, '') WITHIN GROUP (ORDER BY line)
         INTO source_code
         FROM all_source
         WHERE name = UPPER(obj_name) 
@@ -209,11 +226,13 @@ CREATE OR REPLACE FUNCTION compare_schemas(
             AND owner = UPPER(dev_schema_name) 
         ORDER BY line;
 
-        name_entry_position := INSTR(source_code, obj_name);
-
-        ddl_script := 'CREATE OR REPLACE ' || obj_type || ' C##PROD.' || obj_name;
-
-        ddl_script := ddl_script || SUBSTR(source_code,name_entry_position + LENGTH(obj_name) + 1) || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+        name_entry_position := DBMS_LOB.INSTR(UPPER(source_code), UPPER(obj_name), 1, 1);
+        
+        ddl_script := 
+            DBMS_LOB.SUBSTR(source_code, name_entry_position - 1, 1) ||
+            --prod_schema_name ||
+            DBMS_LOB.SUBSTR(source_code, DBMS_LOB.GETLENGTH(source_code) - name_entry_position - dev_schema_name_length + 1, name_entry_position + dev_schema_name_length);
+    
 
         DBMS_OUTPUT.PUT_LINE(ddl_script);
 
@@ -221,8 +240,7 @@ CREATE OR REPLACE FUNCTION compare_schemas(
 
             IF UPPER(obj_type) = 'PACKAGE' THEN
                 get_ddl_for_object(obj_name, 'PACKAGE BODY');
-            END IF;
-        
+            END IF;   
     END get_ddl_for_object;
 
 -------------------------------------------------------------
@@ -261,9 +279,9 @@ BEGIN
     INTO v_column_list
     FROM all_ind_columns
     WHERE index_name = UPPER(p_index_name)
-    AND index_owner = UPPER(p_dev_schema);
+    AND index_owner = UPPER(dev_schema_name);
 
-    v_ddl_script := 'DROP INDEX С##PROD.' || p_index_name || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+    v_ddl_script := 'DROP INDEX С##PROD.' || p_index_name || ';' || CHR(13) || CHR(10) || CHR(13) || CHR(10);
 
     v_ddl_script := v_ddl_script || 
         'CREATE ' || 
@@ -273,19 +291,47 @@ BEGIN
         END ||
         'INDEX C##PROD.' || p_index_name || 
         ' ON C##PROD.' || v_table_name || 
-        ' (' || v_column_list || ')' || CHR(13) || CHR(10);
+        ' (' || v_column_list || ')' ;
 
     IF v_logging = 'NO' THEN
-        v_ddl_script := v_ddl_script || 'NOLOGGING ' || CHR(13) || CHR(10);
+        v_ddl_script := v_ddl_script || 'NOLOGGING ';
     END IF;
 
     IF v_compression = 'ENABLED' THEN
-        v_ddl_script := v_ddl_script || 'COMPRESS ' || CHR(13) || CHR(10);
+        v_ddl_script := v_ddl_script || 'COMPRESS ';
     END IF;
-
+    v_ddl_script := v_ddl_script || ';';
     DBMS_OUTPUT.PUT_LINE(v_ddl_script);
-    ddl_output_script := ddl_output_script || v_ddl_script;
+    ddl_output_script := ddl_output_script || v_ddl_script || CHR(13) || CHR(10);
 END get_ddl_for_index;
+
+--------------------------------------------------------
+
+PROCEDURE get_table_ddl(
+    p_table_name IN VARCHAR2
+) AS
+    v_ddl CLOB;
+BEGIN
+    DBMS_METADATA.SET_TRANSFORM_PARAM(
+        DBMS_METADATA.SESSION_TRANSFORM, 
+        'CONSTRAINTS', 
+        TRUE
+    );
+
+    v_ddl := 'DROP TABLE ' || prod_schema_name || '.' || p_table_name || ' CASCADE CONSTRAINTS;' || CHR(13) || CHR(10);
+    
+    v_ddl := v_ddl || REPLACE(
+        DBMS_METADATA.GET_DDL('TABLE', p_table_name, dev_schema_name), 
+        dev_schema_name, 
+        prod_schema_name
+    );
+    
+    DBMS_OUTPUT.PUT_LINE(v_ddl);
+    ddl_output_script := ddl_output_script || v_ddl || CHR(13) || CHR(10);
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Ошибка: ' || p_table_name || ' - ' || SQLERRM);
+END;
 
 -----------------------------------------------------------------------------
 
@@ -381,35 +427,25 @@ BEGIN
 EXCEPTION
     WHEN OTHERS THEN
         DBMS_OUTPUT.PUT_LINE('Ошибка при изменении таблицы: ' || SQLERRM);
-END compare_and_alter_table;
+END get_alter_table_ddl;
 
---------------------------------------------------------
+-------------------------------------------------------------------
 
-PROCEDURE get_table_ddl(
-    p_table_name IN VARCHAR2
-) AS
-    v_ddl CLOB;
+PROCEDURE get_drop_from_prod_ddl AS
+    drop_prod_script CLOB := '';
 BEGIN
-    DBMS_METADATA.SET_TRANSFORM_PARAM(
-        DBMS_METADATA.SESSION_TRANSFORM, 
-        'CONSTRAINTS', 
-        TRUE
-    );
-
-    v_ddl := 'DROP TABLE ' || prod_schema_name || '.' || p_table_name || ' CASCADE CONSTRAINTS;' || CHR(13) || CHR(10);
-    
-    v_ddl := v_ddl || REPLACE(
-        DBMS_METADATA.GET_DDL('TABLE', p_table_name, dev_schema_name), 
-        dev_schema_name, 
-        prod_schema_name
-    );
-    
-    DBMS_OUTPUT.PUT_LINE(v_ddl);
-    ddl_output_script := ddl_output_script || v_ddl || CHR(13) || CHR(10);
-EXCEPTION
-    WHEN OTHERS THEN
-        DBMS_OUTPUT.PUT_LINE('Ошибка: ' || p_table_name || ' - ' || SQLERRM);
-END;
+    FOR obj IN objects_from_prod_to_drop LOOP
+        drop_prod_script := drop_prod_script || 
+            'DROP ' || obj.object_type || ' ' || 
+            prod_schema_name || '.' || obj.object_name || 
+            CASE 
+                WHEN obj.object_type = 'TABLE' THEN ' CASCADE CONSTRAINTS'
+                ELSE ''
+            END || ';' || CHR(13) || CHR(10);
+    END LOOP;
+    DBMS_OUTPUT.PUT_LINE('необходимо удалить из prod: ' || drop_prod_script);
+    ddl_output_script := ddl_output_script || drop_prod_script;
+END get_drop_from_prod_ddl;
 
 --====================================================================================================        
 BEGIN
@@ -510,15 +546,15 @@ BEGIN
     END LOOP;
 
     FOR i IN 1..functions_to_add.COUNT LOOP
-        get_ddl_for_object(functions_to_add(i));
+        get_ddl_for_object(functions_to_add(i), 'FUNCTION');
     END LOOP;
 
     FOR i IN 1..procedures_to_add.COUNT LOOP
-        get_ddl_for_object(procedures_to_add(i));
+        get_ddl_for_object(procedures_to_add(i), 'PROCEDURE');
     END LOOP;
 
-    FOR i IN 1..indexes_to_add.COUNT LOOP
-        get_ddl_for_object(indexes_to_add(i));
+    FOR i IN 1..packages_to_add.COUNT LOOP
+        get_ddl_for_object(packages_to_add(i), 'PACKAGE');
     END LOOP;
 
     RETURN ddl_output_script;

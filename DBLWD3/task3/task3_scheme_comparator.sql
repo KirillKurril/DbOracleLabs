@@ -210,37 +210,33 @@ CREATE OR REPLACE FUNCTION compare_schemas(
         obj_name     IN VARCHAR2,
         obj_type     IN VARCHAR2
     ) AS
-        source_code CLOB:= EMPTY_CLOB();
         ddl_script  CLOB:= EMPTY_CLOB();
-
-        dev_schema_name_length NUMBER := LENGTH(dev_schema_name);
-        prod_schema_name_length NUMBER := LENGTH(prod_schema_name);        
-
-        name_entry_position NUMBER;
     BEGIN
-        SELECT LISTAGG(text, '') WITHIN GROUP (ORDER BY line)
-        INTO source_code
-        FROM all_source
-        WHERE name = UPPER(obj_name) 
-            AND type = UPPER(obj_type)
-            AND owner = UPPER(dev_schema_name) 
-        ORDER BY line;
+       
+        DBMS_METADATA.SET_TRANSFORM_PARAM(
+            DBMS_METADATA.SESSION_TRANSFORM, 
+            'PRETTY', 
+            FALSE
+        );
 
-        name_entry_position := DBMS_LOB.INSTR(UPPER(source_code), UPPER(obj_name), 1, 1);
-        
-        ddl_script := 
-            DBMS_LOB.SUBSTR(source_code, name_entry_position - 1, 1) ||
-            --prod_schema_name ||
-            DBMS_LOB.SUBSTR(source_code, DBMS_LOB.GETLENGTH(source_code) - name_entry_position - dev_schema_name_length + 1, name_entry_position + dev_schema_name_length);
-    
+        DBMS_METADATA.SET_TRANSFORM_PARAM(
+            DBMS_METADATA.SESSION_TRANSFORM, 
+            'CONSTRAINTS', 
+            TRUE
+        );
+
+        ddl_script := REPLACE(
+            DBMS_METADATA.GET_DDL(UPPER(obj_type), obj_name, dev_schema_name), 
+            dev_schema_name, 
+            prod_schema_name
+        );
 
         DBMS_OUTPUT.PUT_LINE(ddl_script);
+        ddl_output_script := ddl_output_script || ddl_script || CHR(13) || CHR(10);
 
-        ddl_output_script := ddl_output_script || ddl_script;
-
-            IF UPPER(obj_type) = 'PACKAGE' THEN
-                get_ddl_for_object(obj_name, 'PACKAGE BODY');
-            END IF;   
+        IF UPPER(obj_type) = 'PACKAGE' THEN
+            get_ddl_for_object(obj_name, 'PACKAGE_BODY');
+        END IF;   
     END get_ddl_for_object;
 
 -------------------------------------------------------------

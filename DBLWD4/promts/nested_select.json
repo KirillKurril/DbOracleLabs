@@ -1,0 +1,43 @@
+{
+    "queryType": "SELECT",
+    "columns": ["employee_id", "first_name", "last_name", "salary"],
+    "tables": [
+      {
+        "tableName": "employees",
+        "alias": "e"
+      }
+    ],
+    "where": {
+      "conditions": [
+        {
+          "column": "salary",
+          "operator": ">",
+          "value": 50000
+        },
+        {
+          "column": "e.employee_id",
+          "operator": "IN",
+          "subquery": {
+            "queryType": "SELECT",
+            "columns": ["employee_id"],
+            "tables": [
+              {
+                "tableName": "salaries",
+                "alias": "s"
+              }
+            ],
+            "where": {
+              "conditions": [
+                {
+                  "column": "salary",
+                  "operator": ">",
+                  "value": 40000
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+  

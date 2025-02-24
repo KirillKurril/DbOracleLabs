@@ -1,0 +1,33 @@
+{
+    "queryType": "SELECT",
+    "columns": ["employee_id", "first_name", "last_name", "salary"],
+    "tables": [
+      {
+        "tableName": "employees",
+        "alias": "e"
+      }
+    ],
+    "joins": [
+      {
+        "type": "INNER JOIN",
+        "tableName": "departments",
+        "alias": "d",
+        "on": "e.department_id = d.department_id"
+      }
+    ],
+    "where": {
+      "conditions": [
+        {
+          "column": "salary",
+          "operator": ">",
+          "value": 50000
+        },
+        {
+          "column": "d.department_name",
+          "operator": "=",
+          "value": "HR"
+        }
+      ]
+    }
+}
+  

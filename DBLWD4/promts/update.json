@@ -1,0 +1,18 @@
+{
+    "queryType": "UPDATE",
+    "table": "employees",
+    "set": {
+      "salary": 60000,
+      "department_id": 3
+    },
+    "where": {
+      "conditions": [
+        {
+          "column": "employee_id",
+          "operator": "=",
+          "value": 101
+        }
+      ]
+    }
+  }
+  

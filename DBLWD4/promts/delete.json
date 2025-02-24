@@ -1,0 +1,14 @@
+{
+    "queryType": "DELETE",
+    "table": "employees",
+    "where": {
+      "conditions": [
+        {
+          "column": "employee_id",
+          "operator": "=",
+          "value": 101
+        }
+      ]
+    }
+  }
+  

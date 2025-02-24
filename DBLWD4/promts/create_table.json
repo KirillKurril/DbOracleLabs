@@ -1,0 +1,48 @@
+{
+  "queryType": "CREATE TABLE",
+  "table": "employees",
+  "columns": [
+    {
+      "name": "employee_id",
+      "type": "NUMBER",
+      "constraints": [
+        "PRIMARY KEY",
+        "NOT NULL"
+      ]
+    },
+    {
+      "name": "first_name",
+      "type": "VARCHAR2(100)",
+      "constraints": [
+        "NOT NULL"
+      ]
+    },
+    {
+      "name": "last_name",
+      "type": "VARCHAR2(100)",
+      "constraints": [
+        "NOT NULL"
+      ]
+    },
+    {
+      "name": "salary",
+      "type": "NUMBER",
+      "constraints": [
+        "CHECK (salary > 0)"
+      ]
+    },
+    {
+      "name": "department_id",
+      "type": "NUMBER",
+      "constraints": [
+        "NOT NULL"
+      ]
+    }
+  ],
+  
+  "trigger": {
+    "name": "generate_employee_id",
+    "event": "BEFORE INSERT",
+    "triggerBody": "BEGIN\n  :NEW.employee_id := employee_seq.NEXTVAL;\nEND;"
+  }
+}

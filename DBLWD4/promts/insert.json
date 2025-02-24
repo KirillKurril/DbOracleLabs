@@ -1,0 +1,7 @@
+{
+    "queryType": "INSERT",
+    "table": "employees",
+    "columns": ["employee_id", "first_name", "last_name", "salary", "department_id"],
+    "values": [101, "John", "Doe", 55000, 2]
+  }
+  

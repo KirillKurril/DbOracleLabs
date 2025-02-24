@@ -137,6 +137,7 @@ CREATE OR REPLACE FUNCTION compare_schemas(
     ) RETURN BOOLEAN IS
         dev_source   CLOB;
         prod_source  CLOB;
+        as_position INTEGER;
         
         CURSOR source_cursor(
             schema_name VARCHAR2
@@ -159,6 +160,12 @@ CREATE OR REPLACE FUNCTION compare_schemas(
         
         dev_source  := REGEXP_REPLACE(UPPER(dev_source), '\s+|--.*$', '', 1, 0, 'm');
         prod_source := REGEXP_REPLACE(UPPER(prod_source), '\s+|--.*$', '', 1, 0, 'm');
+
+        as_position := INSTR(dev_source, 'AS');
+        dev_source := SUBSTR(dev_source, as_position + 1);
+
+        as_position := INSTR(prod_source, 'AS');
+        prod_source := SUBSTR(prod_source, as_position + 1);
         
         RETURN dev_source = prod_source;
 
@@ -212,12 +219,6 @@ CREATE OR REPLACE FUNCTION compare_schemas(
     ) AS
         ddl_script  CLOB:= EMPTY_CLOB();
     BEGIN
-       
-        DBMS_METADATA.SET_TRANSFORM_PARAM(
-            DBMS_METADATA.SESSION_TRANSFORM, 
-            'PRETTY', 
-            FALSE
-        );
 
         DBMS_METADATA.SET_TRANSFORM_PARAM(
             DBMS_METADATA.SESSION_TRANSFORM, 
@@ -231,12 +232,16 @@ CREATE OR REPLACE FUNCTION compare_schemas(
             prod_schema_name
         );
 
-        DBMS_OUTPUT.PUT_LINE(ddl_script);
-        ddl_output_script := ddl_output_script || ddl_script || CHR(13) || CHR(10);
+        IF (obj_type = 'PACKAGE') THEN
+            ddl_script := REGEXP_REPLACE(ddl_script, '(END\s+\w+\s*;)', '\1' || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10));
+        ELSE
+            ddl_script := ddl_script || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
+        END IF;
 
-        IF UPPER(obj_type) = 'PACKAGE' THEN
-            get_ddl_for_object(obj_name, 'PACKAGE_BODY');
-        END IF;   
+        DBMS_OUTPUT.PUT_LINE(ddl_script);
+        ddl_output_script := ddl_output_script || ddl_script
+        || CHR(13) || CHR(10);
+
     END get_ddl_for_object;
 
 -------------------------------------------------------------
@@ -251,6 +256,7 @@ PROCEDURE get_ddl_for_index(
     v_index_type VARCHAR2(20);
     v_logging VARCHAR2(10);
     v_compression VARCHAR2(10);
+    v_exists NUMBER;
 BEGIN
 
     SELECT 
@@ -277,7 +283,15 @@ BEGIN
     WHERE index_name = UPPER(p_index_name)
     AND index_owner = UPPER(dev_schema_name);
 
-    v_ddl_script := 'DROP INDEX С##PROD.' || p_index_name || ';' || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+    SELECT COUNT(*)
+        INTO v_exists
+        FROM all_indexes
+        WHERE index_name = UPPER(p_index_name) AND owner = UPPER(prod_schema_name);
+
+    IF v_exists > 0 THEN
+        v_ddl_script := 'DROP INDEX С##PROD.' || p_index_name || ';' || CHR(13) || CHR(10) || CHR(13) || CHR(10);
+    END IF;
+
 
     v_ddl_script := v_ddl_script || 
         'CREATE ' || 
@@ -298,7 +312,8 @@ BEGIN
     END IF;
     v_ddl_script := v_ddl_script || ';';
     DBMS_OUTPUT.PUT_LINE(v_ddl_script);
-    ddl_output_script := ddl_output_script || v_ddl_script || CHR(13) || CHR(10);
+    ddl_output_script := ddl_output_script || v_ddl_script
+    || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
 END get_ddl_for_index;
 
 --------------------------------------------------------
@@ -307,23 +322,36 @@ PROCEDURE get_table_ddl(
     p_table_name IN VARCHAR2
 ) AS
     v_ddl CLOB;
+    v_exists NUMBER;
 BEGIN
+    v_ddl := '';
+
     DBMS_METADATA.SET_TRANSFORM_PARAM(
         DBMS_METADATA.SESSION_TRANSFORM, 
         'CONSTRAINTS', 
         TRUE
     );
 
-    v_ddl := 'DROP TABLE ' || prod_schema_name || '.' || p_table_name || ' CASCADE CONSTRAINTS;' || CHR(13) || CHR(10);
+    SELECT COUNT(*)
+        INTO v_exists
+        FROM all_tables
+        WHERE table_name = UPPER(p_table_name) AND owner = 'C##PROD'; 
+
+    IF v_exists > 0 THEN
+        v_ddl := 'DROP TABLE ' || prod_schema_name || '.' || p_table_name || ' CASCADE CONSTRAINTS;' || CHR(13) || CHR(10);
+    END IF;
+
+   
     
     v_ddl := v_ddl || REPLACE(
         DBMS_METADATA.GET_DDL('TABLE', p_table_name, dev_schema_name), 
         dev_schema_name, 
         prod_schema_name
     );
-    
+
     DBMS_OUTPUT.PUT_LINE(v_ddl);
-    ddl_output_script := ddl_output_script || v_ddl || CHR(13) || CHR(10);
+    ddl_output_script := ddl_output_script || v_ddl
+    || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
 EXCEPTION
     WHEN OTHERS THEN
         DBMS_OUTPUT.PUT_LINE('Ошибка: ' || p_table_name || ' - ' || SQLERRM);
@@ -378,7 +406,8 @@ BEGIN
                 CASE WHEN col.dev_nullable = 'N' 
                      THEN ' NOT NULL' 
                      ELSE ' NULL' 
-                END || ');' || CHR(13) || CHR(10);
+                END || ');'
+                 || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
         
         ELSIF col.dev_type IN ('VARCHAR2', 'CHAR', 'NVARCHAR2') 
               AND col.dev_length >= col.prod_length THEN
@@ -386,7 +415,8 @@ BEGIN
                 'ALTER TABLE ' || prod_schema_name || '.' || p_table_name || 
                 ' MODIFY (' || col.column_name || 
                 ' ' || col.dev_type || 
-                '(' || col.dev_length || '));' || CHR(13) || CHR(10);
+                '(' || col.dev_length || '));'
+                 || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
         
         ELSIF col.dev_nullable != col.prod_nullable THEN
             v_alter_script := v_alter_script || 
@@ -395,7 +425,7 @@ BEGIN
                 CASE WHEN col.dev_nullable = 'N' 
                      THEN ' NOT NULL);' 
                      ELSE ' NULL);' 
-                END || CHR(13) || CHR(10);
+                END  || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
         
         ELSIF col.dev_type IN ('NUMBER', 'INTEGER', 'DECIMAL')
               AND col.prod_type IN ('NUMBER', 'INTEGER', 'DECIMAL') THEN
@@ -406,7 +436,7 @@ BEGIN
                 CASE WHEN col.dev_length > 0 
                      THEN '(' || col.dev_length || ')' 
                      ELSE '' 
-                END || ');' || CHR(13) || CHR(10);
+                END  || CHR(13) || CHR(10) || '/' || ');' || CHR(13) || CHR(10);
         
         ELSE
             v_recreate_needed := TRUE;
@@ -417,7 +447,8 @@ BEGIN
     IF v_recreate_needed THEN
         get_table_ddl(p_table_name);
     ELSE
-        ddl_output_script := ddl_output_script || v_alter_script || CHR(13) || CHR(10);
+        ddl_output_script := ddl_output_script || v_alter_script
+       || CHR(13) || CHR(10);
         DBMS_OUTPUT.PUT_LINE(v_alter_script);
     END IF;
 EXCEPTION
@@ -431,16 +462,20 @@ PROCEDURE get_drop_from_prod_ddl AS
     drop_prod_script CLOB := '';
 BEGIN
     FOR obj IN objects_from_prod_to_drop LOOP
+        IF obj.object_name LIKE 'SYS%' THEN
+            CONTINUE;
+        END IF;  
         drop_prod_script := drop_prod_script || 
             'DROP ' || obj.object_type || ' ' || 
             prod_schema_name || '.' || obj.object_name || 
             CASE 
                 WHEN obj.object_type = 'TABLE' THEN ' CASCADE CONSTRAINTS'
                 ELSE ''
-            END || ';' || CHR(13) || CHR(10);
+            END || ';' || CHR(13) || CHR(10) || '/' || CHR(13) || CHR(10);
     END LOOP;
-    DBMS_OUTPUT.PUT_LINE('необходимо удалить из prod: ' || drop_prod_script);
-    ddl_output_script := ddl_output_script || drop_prod_script;
+    
+    ddl_output_script := ddl_output_script || drop_prod_script
+    || CHR(13) || CHR(10);
 END get_drop_from_prod_ddl;
 
 --====================================================================================================        
@@ -552,6 +587,8 @@ BEGIN
     FOR i IN 1..packages_to_add.COUNT LOOP
         get_ddl_for_object(packages_to_add(i), 'PACKAGE');
     END LOOP;
+
+    get_drop_from_prod_ddl();
 
     RETURN ddl_output_script;
 

@@ -19,11 +19,7 @@ CREATE TABLE C##DEV.employees (
     employee_id NUMBER PRIMARY KEY,
     first_name VARCHAR2(100),
     last_name VARCHAR2(100),
-    hire_date DATE,
-    department_id NUMBER,
-    CONSTRAINT fk_department
-        FOREIGN KEY (department_id)
-        REFERENCES C##DEV.departments (department_id)
+    hire_date DATE
 );
 
 CREATE TABLE C##DEV.emp_dept (
@@ -52,8 +48,7 @@ CREATE TABLE C##PROD.employees (
     employee_id NUMBER PRIMARY KEY,
     first_name VARCHAR2(50),
     last_name VARCHAR2(50),
-    hire_date DATE,
-    department_id NUMBER
+    hire_date DATE
 );
 
 CREATE TABLE C##PROD.emp_dept (
@@ -64,25 +59,25 @@ CREATE TABLE C##PROD.emp_dept (
     CONSTRAINT fk_dept FOREIGN KEY (department_id) REFERENCES C##PROD.departments (department_id)
 );
 
-INSERT INTO C##DEV.departments VALUES (1, 'HR', 'New York', 1001);
-INSERT INTO C##DEV.departments VALUES (2, 'Engineering', 'San Francisco', 1002);
+-- INSERT INTO C##DEV.departments VALUES (1, 'HR', 'New York', 1001);
+-- INSERT INTO C##DEV.departments VALUES (2, 'Engineering', 'San Francisco', 1002);
 
-INSERT INTO C##DEV.employees VALUES (101, 'Alice', 'Smith', TO_DATE('2022-01-01', 'YYYY-MM-DD'), 1);
-INSERT INTO C##DEV.employees VALUES (102, 'Bob', 'Johnson', TO_DATE('2022-03-01', 'YYYY-MM-DD'), 2);
+-- INSERT INTO C##DEV.employees VALUES (101, 'Alice', 'Smith', TO_DATE('2022-01-01', 'YYYY-MM-DD'), 1);
+-- INSERT INTO C##DEV.employees VALUES (102, 'Bob', 'Johnson', TO_DATE('2022-03-01', 'YYYY-MM-DD'), 2);
 
-INSERT INTO C##DEV.emp_dept VALUES (1, 101, 1);
-INSERT INTO C##DEV.emp_dept VALUES (2, 102, 2);
+-- INSERT INTO C##DEV.emp_dept VALUES (1, 101, 1);
+-- INSERT INTO C##DEV.emp_dept VALUES (2, 102, 2);
 
-INSERT INTO C##DEV.salaries VALUES (101, 50000, 5000);
-INSERT INTO C##DEV.salaries VALUES (102, 60000, 6000);
+-- INSERT INTO C##DEV.salaries VALUES (101, 50000, 5000);
+-- INSERT INTO C##DEV.salaries VALUES (102, 60000, 6000);
 
-INSERT INTO C##PROD.departments VALUES (1, 'HR', 'New York');
-INSERT INTO C##PROD.departments VALUES (2, 'Engineering', 'San Francisco');
+-- INSERT INTO C##PROD.departments VALUES (1, 'HR', 'New York');
+-- INSERT INTO C##PROD.departments VALUES (2, 'Engineering', 'San Francisco');
 
-INSERT INTO C##PROD.employees VALUES (101, 'Alice', 'Smith', TO_DATE('2022-01-01', 'YYYY-MM-DD'), 1);
-INSERT INTO C##PROD.employees VALUES (102, 'Bob', 'Johnson', TO_DATE('2022-03-01', 'YYYY-MM-DD'), 2);
+-- INSERT INTO C##PROD.employees VALUES (101, 'Alice', 'Smith', TO_DATE('2022-01-01', 'YYYY-MM-DD'), 1);
+-- INSERT INTO C##PROD.employees VALUES (102, 'Bob', 'Johnson', TO_DATE('2022-03-01', 'YYYY-MM-DD'), 2);
 
-INSERT INTO C##PROD.emp_dept VALUES (1, 101, 1);
-INSERT INTO C##PROD.emp_dept VALUES (2, 102, 2);
+-- INSERT INTO C##PROD.emp_dept VALUES (1, 101, 1);
+-- INSERT INTO C##PROD.emp_dept VALUES (2, 102, 2);
 
 

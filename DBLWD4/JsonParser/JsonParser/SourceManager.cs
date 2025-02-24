@@ -5,7 +5,7 @@
         static string _sourceDirectory = "D:\\uni\\DbOracleLabs\\DBLWD4\\promts";
         static string _format = "*.json";
         static Parser _parser = new();
-        public static void StartUp()
+        public static async Task StartUp()
         {
             while (true)
             {
@@ -25,7 +25,7 @@
                         break;
 
                     string selectedPromt = promtFilePathes[selectedIndex - 1];
-                    string response = _parser.Parse(selectedPromt);
+                    string response = await _parser.Parse(selectedPromt);
                     
                     Console.WriteLine(response);
                 }

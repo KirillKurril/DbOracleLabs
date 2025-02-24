@@ -15,6 +15,7 @@
           "value": 30000
         },
         {
+          "logicalOperator": "AND",
           "operator": "EXISTS",
           "subquery": {
             "queryType": "SELECT",

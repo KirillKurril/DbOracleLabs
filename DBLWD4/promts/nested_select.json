@@ -15,6 +15,7 @@
           "value": 50000
         },
         {
+          "logicalOperator": "AND",
           "column": "e.employee_id",
           "operator": "IN",
           "subquery": {

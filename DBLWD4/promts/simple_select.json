@@ -23,6 +23,7 @@
           "value": 50000
         },
         {
+          "logicalOperator": "AND",
           "column": "d.department_name",
           "operator": "=",
           "value": "HR"

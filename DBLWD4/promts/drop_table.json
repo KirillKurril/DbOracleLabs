@@ -1,0 +1,7 @@
+{
+    "queryType": "DROP TABLE",
+    "table": "employees",
+    "removeConstraints": true,
+    "removeTrigger": true,
+    "primaryKey": "employee_id"
+}

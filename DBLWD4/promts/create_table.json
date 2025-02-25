@@ -40,9 +40,9 @@
     }
   ],
   
-  "trigger": {
-    "name": "generate_employee_id",
-    "event": "BEFORE INSERT",
-    "triggerBody": "BEGIN\n  :NEW.employee_id := employee_seq.NEXTVAL;\nEND;"
-  }
+  "constraints": [
+      "UNIQUE (first_name, last_name)",
+      "FOREIGN KEY (department_id) REFERENCES departments(department_id)"
+  ],
+  "primaryKey": "employee_id"
 }

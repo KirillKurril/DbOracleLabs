@@ -1,7 +1,7 @@
 {
     "queryType": "DROP TABLE",
-    "table": "employees",
+    "table": "projects",
     "removeConstraints": true,
     "removeTrigger": true,
-    "primaryKey": "employee_id"
+    "primaryKey": "project_id"
 }

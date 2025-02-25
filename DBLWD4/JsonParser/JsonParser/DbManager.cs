@@ -21,6 +21,42 @@ namespace JsonParser
             {
                 _connection.Open();
                 Console.WriteLine("Connection successfully established.");
+
+                using (var command = new OracleCommand("SELECT * FROM user_role_privs WHERE granted_role = 'DBA'", _connection))
+                {
+                    var reader = command.ExecuteReader();
+                    if (reader.HasRows)
+                    {
+                        Console.WriteLine("User has DBA privileges.");
+                    }
+                    else
+                    {
+                        Console.WriteLine("User does not have DBA privileges.");
+                    }
+                }
+                Console.WriteLine("User System Privileges:");
+                using (var command = new OracleCommand("SELECT privilege FROM user_sys_privs", _connection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            Console.WriteLine(reader.GetString(0));
+                        }
+                    }
+                }
+
+                Console.WriteLine("User Object Privileges:");
+                using (var command = new OracleCommand("SELECT privilege, table_name FROM user_tab_privs", _connection))
+                {
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            Console.WriteLine($"{reader.GetString(0)} on {reader.GetString(1)}");
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -53,6 +89,8 @@ namespace JsonParser
 
         public string ExecuteSelectQuery(string sql)
         {
+            Console.WriteLine(sql);
+
             try
             {
                 OpenConnection();
@@ -88,6 +126,8 @@ namespace JsonParser
 
         public string ExecuteDmlQuery(string sql)
         {
+            Console.WriteLine(sql);
+
             try
             {
                 OpenConnection();
@@ -109,6 +149,8 @@ namespace JsonParser
 
         public string ExecuteDdlQuery(string sql)
         {
+            Console.WriteLine(sql);
+
             try
             {
                 OpenConnection();

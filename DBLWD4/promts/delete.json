@@ -1,12 +1,12 @@
 {
     "queryType": "DELETE",
-    "table": "employees",
+    "table": "projects",
     "where": {
       "conditions": [
         {
-          "column": "employee_id",
+          "column": "project_id",
           "operator": "=",
-          "value": 101
+          "value": 1
         }
       ]
     }

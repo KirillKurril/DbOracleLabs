@@ -1,44 +1,37 @@
 {
-    "queryType": "SELECT",
-    "columns": ["employee_id", "first_name", "last_name", "salary"],
-    "tables": [
+  "queryType": "SELECT",
+  "columns": ["project_id", "project_name"],
+  "tables": [
       {
-        "tableName": "employees",
-        "alias": "e"
+          "tableName": "projects",
+          "alias": "p"
       }
-    ],
-    "where": {
+  ],
+  "where": {
       "conditions": [
-        {
-          "column": "salary",
-          "operator": ">",
-          "value": 50000
-        },
-        {
-          "logicalOperator": "AND",
-          "column": "e.employee_id",
-          "operator": "IN",
-          "subquery": {
-            "queryType": "SELECT",
-            "columns": ["employee_id"],
-            "tables": [
-              {
-                "tableName": "salaries",
-                "alias": "s"
+          {
+              "column": "p.client_id",
+              "operator": "IN",
+              "subquery": {
+                  "queryType": "SELECT",
+                  "columns": ["client_id"],
+                  "tables": [
+                      {
+                          "tableName": "clients",
+                          "alias": "c"
+                      }
+                  ],
+                  "where": {
+                      "conditions": [
+                          {
+                              "column": "c.client_name",
+                              "operator": "LIKE",
+                              "value": "'Client%'"
+                          }
+                      ]
+                  }
               }
-            ],
-            "where": {
-              "conditions": [
-                {
-                  "column": "salary",
-                  "operator": ">",
-                  "value": 40000
-                }
-              ]
-            }
           }
-        }
       ]
-    }
   }
-  
+}

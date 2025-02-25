@@ -1,44 +1,42 @@
 {
-    "queryType": "SELECT",
-    "columns": ["employee_id", "first_name", "last_name", "salary"],
-    "tables": [
+  "queryType": "SELECT",
+  "columns": ["project_id", "project_name", "start_date", "end_date"],
+  "tables": [
       {
-        "tableName": "employees",
-        "alias": "e"
+          "tableName": "projects",
+          "alias": "p"
       }
-    ],
-    "where": {
+  ],
+  "where": {
       "conditions": [
-        {
-          "column": "salary",
-          "operator": ">",
-          "value": 30000
-        },
-        {
-          "logicalOperator": "AND",
-          "operator": "EXISTS",
-          "subquery": {
-            "queryType": "SELECT",
-            "columns": ["employee_id"],
-            "tables": [
-              {
-                "tableName": "salaries",
-                "alias": "s"
+          {
+              "column": "p.client_id",
+              "operator": "=",
+              "value": "123"
+          },
+          {
+              "logicalOperator": "AND",
+              "operator": "EXISTS",
+              "subquery": {
+                  "queryType": "SELECT",
+                  "columns": ["client_id"],
+                  "tables": [
+                      {
+                          "tableName": "clients",
+                          "alias": "c"
+                      }
+                  ],
+                  "where": {
+                      "conditions": [
+                          {
+                              "column": "c.client_id",
+                              "operator": "=",
+                              "value": "p.client_id"
+                          }
+                      ]
+                  }
               }
-            ],
-            "where": {
-              "conditions": [
-                {
-                  "column": "s.employee_id",
-                  "operator": "=",
-                  "value": "e.employee_id"
-                }
-              ]
-            }
           }
-        }
       ]
-    }
   }
-  
-  
+}

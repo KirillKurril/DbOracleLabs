@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace JsonParser
 {
@@ -21,26 +22,32 @@ namespace JsonParser
             {
                 case "SELECT":
                     _query = createSelectQuery(_json);
+                    //_query = Regex.Replace(createSelectQuery(_json), @"\s+", " ").Trim();
                     return  _dbManager.ExecuteSelectQuery(_query);
 
                 case "CREATE TABLE":
                     _query = createCreateTableQuery();
+                    //_query = Regex.Replace(createCreateTableQuery(), @"\s+", " ").Trim();
                     return _dbManager.ExecuteDdlQuery(_query);
 
                 case "DROP TABLE":
                     _query = createDropTableQuery();
+                    //_query = Regex.Replace(createDropTableQuery(), @"\s+", " ").Trim();
                     return _dbManager.ExecuteDdlQuery(_query);
 
                 case "INSERT":
                     _query = createInsertQuery();
+                    //_query = Regex.Replace(createInsertQuery(), @"\s+", " ").Trim();
                     return _dbManager.ExecuteDmlQuery(_query);
 
                 case "UPDATE":
                     _query = createUpdateQuery();
+                    //_query = Regex.Replace(createUpdateQuery(), @"\s+", " ").Trim();
                     return _dbManager.ExecuteDmlQuery(_query);
 
                 case "DELETE":
                     _query = createDeleteQuery();
+                    //_query = Regex.Replace(createDeleteQuery(), @"\s+", " ").Trim();
                     return _dbManager.ExecuteDmlQuery(_query);
 
                 default:
@@ -55,7 +62,12 @@ namespace JsonParser
 
             foreach (var condition in conditions)
             {
-                if (condition["operator"] != null)
+                if (condition["logicalOperator"] != null)
+                {
+                    whereClauses.Add($"{condition["logicalOperator"]} ");
+                }
+
+                if (condition["operator"].ToString().Contains("EXIST") || condition["operator"].ToString().Contains("IN"))
                 {
                     var subquery = (JObject)condition["subquery"]!;
                     var subqueryString = createSelectQuery(subquery);
@@ -63,11 +75,23 @@ namespace JsonParser
                 }
                 else
                 {
-                    var clause = $"{condition["column"]} {condition["operator"]} {condition["value"]}";
-                    if (condition["logicalOperator"] != null)
+                    string value;
+                    var tokenValue = condition["value"];
+
+                    if (tokenValue.Type == JTokenType.String)
                     {
-                        clause = $"{condition["logicalOperator"]} {clause}";
+                        string strValue = tokenValue.ToString();
+                        if (DateTime.TryParse(strValue, out _))
+                            value = $"'{strValue}'";
+                        else
+                            value = $"'{strValue}'"; 
                     }
+                    else
+                    {
+                        value = condition["value"].ToString();
+                    }
+
+                    var clause = $"{condition["column"]} {condition["operator"]} {value}";
                     whereClauses.Add(clause);
                 }
             }
@@ -81,6 +105,7 @@ namespace JsonParser
 
             var tableName = _json["table"].ToString();
             queryBuilder.Append(tableName + " (");
+            queryBuilder.AppendLine();
 
             var columns = _json["columns"].ToObject<List<JObject>>();
             var columnDefinitions = new List<string>();
@@ -99,31 +124,32 @@ namespace JsonParser
 
                 columnDefinitions.Add(columnDefinition);
             }
-            queryBuilder.Append(string.Join(", ", columnDefinitions));
+            queryBuilder.Append(string.Join(", \n", columnDefinitions));
+
 
             if (_json["constraints"] != null)
             {
-                queryBuilder.Append(",");
+                queryBuilder.Append(", \n");
                 var constraints = _json["constraints"].ToObject<List<string>>();
-                queryBuilder.Append(string.Join(", ", constraints));
+                queryBuilder.Append(string.Join(", \n", constraints));
             }
 
-            queryBuilder.Append(");");
+            queryBuilder.Append(");\n\n");
 
 
             if (_json["primaryKey"] != null)
             {
                 queryBuilder.AppendLine();
-                queryBuilder.Append($"CREATE SEQUENCE seq_{tableName}_{_json["primaryKey"].ToString()} START WITH 1 INCREMENT BY 1;");
+                queryBuilder.Append($"CREATE SEQUENCE seq_{tableName}_{_json["primaryKey"].ToString()} START WITH 1 INCREMENT BY 1;\n");
 
                 queryBuilder.AppendLine();
                 queryBuilder.Append(
-                    $"CREATE TRIGGER {tableName}_pk_trigger " +
-                    $"BEFORE INSERT ON {tableName} " +
-                    $"FOR EACH ROW " +
-                    $"BEGIN " +
-                    $"SET NEW.{_json["primaryKey"].ToString()} = NEXTVAL(seq_{tableName}_{_json["primaryKey"].ToString()});" +
-                    $"END;");
+                    $"CREATE OR REPLACE TRIGGER {tableName}_pk_trigger \n" +
+                    $"BEFORE INSERT ON {tableName} \n" +
+                    $"FOR EACH ROW \n" +
+                    $"BEGIN \n" +
+                    $"    :NEW.{_json["primaryKey"].ToString()} := seq_{tableName}_{_json["primaryKey"].ToString()}.NEXTVAL;\n" +
+                    $"END;\n");
             }
 
             return queryBuilder.ToString();
@@ -141,17 +167,17 @@ namespace JsonParser
                 queryBuilder.Append(" CASCADE CONSTRAINTS");
             }
 
-            queryBuilder.Append(";");
+            queryBuilder.Append(";\n");
 
             if (_json["removeTrigger"] != null && (bool)_json["removeTrigger"])
             {
                 var primaryKeyColumn = _json["primaryKey"].ToString();
 
                 queryBuilder.AppendLine();
-                queryBuilder.Append($"DROP SEQUENCE IF EXISTS seq_{tableName}_{primaryKeyColumn};");
+                queryBuilder.Append($"DROP SEQUENCE seq_{tableName}_{primaryKeyColumn};\n");
 
-                queryBuilder.AppendLine();
-                queryBuilder.Append($"DROP TRIGGER IF EXISTS {tableName}_pk_trigger;");
+                //queryBuilder.AppendLine();
+                //queryBuilder.Append($"DROP TRIGGER IF EXISTS {tableName}_pk_trigger;\n");
 
             }
 
@@ -163,8 +189,9 @@ namespace JsonParser
             var queryBuilder = new StringBuilder();
             queryBuilder.Append("DELETE FROM ");
 
-            var tables = _json["tables"].ToObject<List<JObject>>();
-            queryBuilder.Append(tables[0]["tableName"]); 
+            var table = _json["table"].ToString();
+            queryBuilder.Append(table);
+            queryBuilder.AppendLine();
 
             if (_json["where"] != null)
             {
@@ -178,14 +205,34 @@ namespace JsonParser
             var queryBuilder = new StringBuilder();
             queryBuilder.Append("INSERT INTO ");
 
-            var tables = _json["tables"].ToObject<List<JObject>>();
-            queryBuilder.Append(tables[0]["tableName"]);
+            var table = _json["table"].ToString();
+            queryBuilder.Append(table);
 
             var columns = _json["columns"].ToObject<List<string>>();
             queryBuilder.Append(" (" + string.Join(", ", columns) + ")");
+            queryBuilder.AppendLine();
 
             var values = _json["values"].ToObject<List<object>>();
-            queryBuilder.Append(" VALUES (" + string.Join(", ", values) + ")");
+            var formattedValues = new List<string>();
+
+
+            foreach (var value in values)
+            {
+                if (value is string strValue)
+                {
+                    if (DateTime.TryParse(strValue, out _))
+                        formattedValues.Add($"'{strValue}'"); 
+                    else
+                        formattedValues.Add($"'{strValue}'"); 
+                }
+                else
+                {
+                    formattedValues.Add(value.ToString()); 
+                }
+            }
+
+            queryBuilder.Append(" VALUES (" + string.Join(", ", formattedValues) + ")");
+            queryBuilder.AppendLine();
 
             return queryBuilder.ToString();
         }
@@ -194,17 +241,37 @@ namespace JsonParser
             var queryBuilder = new StringBuilder();
             queryBuilder.Append("UPDATE ");
 
-            var tables = _json["tables"].ToObject<List<JObject>>();
-            queryBuilder.Append(tables[0]["tableName"]); 
+            var table = _json["table"].ToString();
+            queryBuilder.Append(table);
+            queryBuilder.AppendLine();
 
             queryBuilder.Append(" SET ");
-            var updates = _json["updates"].ToObject<List<JObject>>();
+            var setValues = _json["set"].ToObject<Dictionary<string, object>>();
             var setClauses = new List<string>();
-            foreach (var update in updates)
+
+            foreach (var kvp in setValues)
             {
-                setClauses.Add($"{update["column"]} = {update["value"]}");
+                string value;
+
+                if (kvp.Value is string strValue)
+                {
+                    if (DateTime.TryParse(strValue, out _))
+                        value = $"'{strValue}'"; 
+                    else
+                        value = $"'{strValue}'"; 
+                }
+                else
+                {
+                    value = kvp.Value.ToString(); 
+                }
+
+                setClauses.Add($"{kvp.Key} = {value}");
             }
+
+
             queryBuilder.Append(string.Join(", ", setClauses));
+            queryBuilder.AppendLine();
+
 
             if (_json["where"] != null)
             {
@@ -213,42 +280,44 @@ namespace JsonParser
 
             return queryBuilder.ToString();
         }
-        private string createSelectQuery(JObject whereJson)
+        private string createSelectQuery(JObject json)
         {
             var queryBuilder = new StringBuilder();
             queryBuilder.Append("SELECT ");
 
-            var columns = _json["columns"].ToObject<List<string>>();
+            var columns = json["columns"].ToObject<List<string>>();
             queryBuilder.Append(string.Join(", ", columns));
             queryBuilder.AppendLine();
 
-            var tables = _json["tables"].ToObject<List<JObject>>();
+            var tables = json["tables"].ToObject<List<JObject>>();
             queryBuilder.Append(" FROM " + string.Join(", ", tables.Select(t => $"{t["tableName"]} AS {t["alias"]}")));
             queryBuilder.AppendLine();
 
-            if (_json["joins"] != null)
+            if (json["joins"] != null)
             {
-                foreach (var join in _json["joins"])
+                foreach (var join in json["joins"])
                 {
                     queryBuilder.Append($" {join["type"]} {join["tableName"]} AS {join["alias"]} ON {join["on"]}");
                 }
-            }
-            queryBuilder.AppendLine();
-
-            if (_json["where"] != null)
-            {
-                queryBuilder.Append(" WHERE " + BuildWhereClause((JObject)_json["where"]));
+                queryBuilder.AppendLine();
             }
 
-            if (_json["groupBy"] != null)
+            if (json["where"] != null)
             {
-                var groupByColumns = _json["groupBy"].ToObject<List<string>>();
+                queryBuilder.Append(" WHERE " + BuildWhereClause((JObject)json["where"]));
+                queryBuilder.AppendLine();
+            }
+
+            if (json["groupBy"] != null)
+            {
+                var groupByColumns = json["groupBy"].ToObject<List<string>>();
                 queryBuilder.Append(" GROUP BY " + string.Join(", ", groupByColumns));
+                queryBuilder.AppendLine();
             }
 
-            if (_json["having"] != null)
+            if (json["having"] != null)
             {
-                var havingConditions = _json["having"]["conditions"].ToObject<List<JObject>>();
+                var havingConditions = json["having"]["conditions"].ToObject<List<JObject>>();
                 if (havingConditions.Count > 0)
                 {
                     queryBuilder.Append(" HAVING ");
@@ -260,19 +329,20 @@ namespace JsonParser
                     }
                     queryBuilder.Append(string.Join(" AND ", havingClauses));
                 }
+                queryBuilder.AppendLine();
             }
 
-            if (_json["orderBy"] != null)
+            if (json["orderBy"] != null)
             {
-                var orderByColumns = _json["orderBy"].ToObject<List<JObject>>();
+                var orderByColumns = json["orderBy"].ToObject<List<JObject>>();
                 var orderByClauses = new List<string>();
                 foreach (var order in orderByColumns)
                 {
                     orderByClauses.Add($"{order["column"]} {order["direction"]}");
                 }
                 queryBuilder.Append(" ORDER BY " + string.Join(", ", orderByClauses));
+                queryBuilder.AppendLine();
             }
-
             return queryBuilder.ToString();
         }
     }

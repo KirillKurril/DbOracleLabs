@@ -21,28 +21,27 @@ namespace JsonParser
             {
                 case "SELECT":
                     _query = createSelectQuery(_json);
-                    string response =  _dbManager.ExecuteSelectQuery(_query);
-                    break;
+                    return  _dbManager.ExecuteSelectQuery(_query);
 
                 case "CREATE TABLE":
                     _query = createCreateTableQuery();
-                    break;
+                    return _dbManager.ExecuteDdlQuery(_query);
 
                 case "DROP TABLE":
                     _query = createDropTableQuery();
-                    break;
+                    return _dbManager.ExecuteDdlQuery(_query);
 
                 case "INSERT":
                     _query = createInsertQuery();
-                    break;
+                    return _dbManager.ExecuteDmlQuery(_query);
 
                 case "UPDATE":
                     _query = createUpdateQuery();
-                    break;
+                    return _dbManager.ExecuteDmlQuery(_query);
 
                 case "DELETE":
                     _query = createDeleteQuery();
-                    break;
+                    return _dbManager.ExecuteDmlQuery(_query);
 
                 default:
                     return "Wrong promt file format!";

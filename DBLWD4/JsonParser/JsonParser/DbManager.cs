@@ -12,6 +12,27 @@ namespace JsonParser
         {
             _connectionString = connectionString;
             _connection = new OracleConnection(_connectionString);
+            TestConnection(); 
+        }
+
+        private void TestConnection()
+        {
+            try
+            {
+                _connection.Open();
+                Console.WriteLine("Connection successfully established.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Connection error: {ex.Message}");
+            }
+            finally
+            {
+                if (_connection.State == System.Data.ConnectionState.Open)
+                {
+                    _connection.Close();
+                }
+            }
         }
 
         public void OpenConnection()

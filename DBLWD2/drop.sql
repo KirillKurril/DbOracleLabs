@@ -14,3 +14,10 @@ BEGIN
     EXECUTE IMMEDIATE 'DROP PROCEDURE ROLLBACK_IN_SECONDS';
 END;
 /
+
+drop SEQUENCE student_id_seq;
+drop SEQUENCE group_id_seq;
+drop SEQUENCE students_audit_seq;
+drop SEQUENCE groupd_audit_seq;
+
+DROP PROCEDURE ROLLBACK_IN_SECONDS;

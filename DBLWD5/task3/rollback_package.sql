@@ -10,7 +10,13 @@ CREATE OR REPLACE PACKAGE audit_rollback_pkg AS
     FUNCTION get_sorted_audit_records(
         p_target_timestamp IN TIMESTAMP
     ) RETURN SYS_REFCURSOR;
-    
+
+    PROCEDURE disable_audit_triggers;
+    PROCEDURE enable_audit_triggers;
+    PROCEDURE cleanup_audit_records(
+        p_target_timestamp IN TIMESTAMP
+    );
+
 END audit_rollback_pkg;
 /
 
@@ -86,7 +92,36 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
         RETURN v_result;
     END get_sorted_audit_records;
 
-    
+    PROCEDURE disable_audit_triggers IS
+    BEGIN
+        EXECUTE IMMEDIATE 'ALTER TRIGGER artists_audit_trigger DISABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER albums_audit_trigger DISABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER tracks_audit_trigger DISABLE';
+    END disable_audit_triggers;
+
+    PROCEDURE enable_audit_triggers IS
+    BEGIN
+        EXECUTE IMMEDIATE 'ALTER TRIGGER artists_audit_trigger ENABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER albums_audit_trigger ENABLE';
+        EXECUTE IMMEDIATE 'ALTER TRIGGER tracks_audit_trigger ENABLE';
+    END enable_audit_triggers;
+
+    PROCEDURE cleanup_audit_records(
+        p_target_timestamp IN TIMESTAMP
+    ) IS
+    BEGIN
+        DELETE FROM audit_artists 
+        WHERE operation_timestamp >= p_target_timestamp;
+        
+        DELETE FROM audit_albums 
+        WHERE operation_timestamp >= p_target_timestamp;
+        
+        DELETE FROM audit_tracks 
+        WHERE operation_timestamp >= p_target_timestamp;
+        
+        COMMIT;
+    END cleanup_audit_records;
+
     PROCEDURE perform_rollback(
         p_target_timestamp IN TIMESTAMP
     ) IS
@@ -106,6 +141,8 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
         v_old_value4 VARCHAR2(200);
         v_new_value4 VARCHAR2(200);
     BEGIN
+        disable_audit_triggers;
+
         v_audit_cursor := get_sorted_audit_records(p_target_timestamp);
 
         LOOP
@@ -165,6 +202,10 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
         END LOOP;
 
         CLOSE v_audit_cursor;
+
+        cleanup_audit_records(p_target_timestamp);
+        enable_audit_triggers;
+        
         COMMIT;
     END perform_rollback;
 

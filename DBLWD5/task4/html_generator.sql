@@ -136,7 +136,6 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
     ) IS
         v_audit_cursor SYS_REFCURSOR;
     BEGIN
-        -- Directly use the function from the rollback package
         v_audit_cursor := audit_rollback_pkg.get_sorted_audit_records(p_start_timestamp);
         
         write_html_report(v_audit_cursor, p_directory, p_filename);
@@ -153,7 +152,6 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
     BEGIN
         v_last_timestamp := get_last_report_timestamp();
         
-        -- Directly use the function from the rollback package
         v_audit_cursor := audit_rollback_pkg.get_sorted_audit_records(v_last_timestamp);
         
         write_html_report(v_audit_cursor, p_directory, p_filename);

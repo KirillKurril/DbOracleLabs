@@ -4,19 +4,6 @@ CREATE OR REPLACE PACKAGE audit_report_pkg AS
         p_directory IN VARCHAR2 DEFAULT 'REPORT_DIR',
         p_filename IN VARCHAR2 DEFAULT NULL
     );
-PROCEDURE generate_dml_report(
-    p_directory IN VARCHAR2 DEFAULT 'REPORT_DIR',
-    p_filename IN VARCHAR2 DEFAULT NULL
-);
-END audit_report_pkg;
-/
-
-CREATE OR REPLACE PACKAGE audit_report_pkg AS
-    PROCEDURE generate_dml_report(
-        p_start_timestamp IN TIMESTAMP,
-        p_directory IN VARCHAR2 DEFAULT 'REPORT_DIR',
-        p_filename IN VARCHAR2 DEFAULT NULL
-    );
 
     PROCEDURE generate_dml_report(
         p_directory IN VARCHAR2 DEFAULT 'REPORT_DIR',
@@ -25,7 +12,7 @@ CREATE OR REPLACE PACKAGE audit_report_pkg AS
 END audit_report_pkg;
 /
 
-CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
+CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS 
     FUNCTION get_last_report_timestamp RETURN TIMESTAMP IS
         v_last_timestamp TIMESTAMP;
     BEGIN
@@ -61,10 +48,10 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
         v_new_value1 VARCHAR2(200);
         v_old_value2 VARCHAR2(200);
         v_new_value2 VARCHAR2(200);
-        v_old_value3 DATE;
-        v_new_value3 DATE;
-        v_old_value4 NUMBER;
-        v_new_value4 NUMBER;
+        v_old_value3 VARCHAR2(200);
+        v_new_value3 VARCHAR2(200);
+        v_old_value4 VARCHAR2(200);
+        v_new_value4 VARCHAR2(200);
         
         TYPE operation_counts IS TABLE OF NUMBER INDEX BY VARCHAR2(10);
         v_counts operation_counts;
@@ -77,68 +64,64 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
 
         v_file := UTL_FILE.FOPEN(p_directory, v_filename, 'W');
 
-        UTL_FILE.PUTF(v_file, '<!DOCTYPE html>
-<html>
-<head>
-    <title>DML Operations Report</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid black; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-    </style>
-</head>
-<body>
-    <h1>DML Operations Report</h1>
-    <table>
-        <tr>
-            <th>Table</th>
-            <th>Insert Count</th>
-            <th>Update Count</th>
-            <th>Delete Count</th>
-        </tr>');
+        UTL_FILE.PUT_LINE(v_file, '<!DOCTYPE html>');
+        UTL_FILE.PUT_LINE(v_file, '<html>');
+        UTL_FILE.PUT_LINE(v_file, '<head>');
+        UTL_FILE.PUT_LINE(v_file, '    <title>DML Operations Report</title>');
+        UTL_FILE.PUT_LINE(v_file, '    <style>');
+        UTL_FILE.PUT_LINE(v_file, '        table { border-collapse: collapse; width: 100%; }');
+        UTL_FILE.PUT_LINE(v_file, '        th, td { border: 1px solid black; padding: 8px; text-align: left; }');
+        UTL_FILE.PUT_LINE(v_file, '        th { background-color: #f2f2f2; }');
+        UTL_FILE.PUT_LINE(v_file, '    </style>');
+        UTL_FILE.PUT_LINE(v_file, '</head>');
+        UTL_FILE.PUT_LINE(v_file, '<body>');
+        UTL_FILE.PUT_LINE(v_file, '    <h1>DML Operations Report</h1>');
+        UTL_FILE.PUT_LINE(v_file, '    <table>');
+        UTL_FILE.PUT_LINE(v_file, '        <tr>');
+        UTL_FILE.PUT_LINE(v_file, '            <th>Table</th>');
+        UTL_FILE.PUT_LINE(v_file, '            <th>Insert Count</th>');
+        UTL_FILE.PUT_LINE(v_file, '            <th>Update Count</th>');
+        UTL_FILE.PUT_LINE(v_file, '            <th>Delete Count</th>');
+        UTL_FILE.PUT_LINE(v_file, '        </tr>');
 
         v_counts('INSERT') := 0;
         v_counts('UPDATE') := 0;
         v_counts('DELETE') := 0;
 
         LOOP
-            FETCH v_audit_cursor INTO 
+            FETCH p_cursor INTO 
                 v_table_name, v_record_id, v_operation_type, v_operation_timestamp,
                 v_old_value1, v_new_value1,
                 v_old_value2, v_new_value2,
                 v_old_value3, v_new_value3,
                 v_old_value4, v_new_value4;
             
-            EXIT WHEN v_audit_cursor%NOTFOUND;
+            EXIT WHEN p_cursor%NOTFOUND;
 
             v_counts(v_operation_type) := v_counts(v_operation_type) + 1;
         END LOOP;
 
-        UTL_FILE.PUTF(v_file, '
-        <tr>
-            <td>Artists</td>
-            <td>%s</td>
-            <td>%s</td>
-            <td>%s</td>
-        </tr>
-        <tr>
-            <td>Albums</td>
-            <td>%s</td>
-            <td>%s</td>
-            <td>%s</td>
-        </tr>
-        <tr>
-            <td>Tracks</td>
-            <td>%s</td>
-            <td>%s</td>
-            <td>%s</td>
-        </tr>
-    </table>
-</body>
-</html>', 
-            v_counts('INSERT'), v_counts('UPDATE'), v_counts('DELETE'),
-            v_counts('INSERT'), v_counts('UPDATE'), v_counts('DELETE'),
-            v_counts('INSERT'), v_counts('UPDATE'), v_counts('DELETE'));
+        UTL_FILE.PUT_LINE(v_file, '        <tr>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>Artists</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '        </tr>');
+        UTL_FILE.PUT_LINE(v_file, '        <tr>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>Albums</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '        </tr>');
+        UTL_FILE.PUT_LINE(v_file, '        <tr>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>Tracks</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '        </tr>');
+        UTL_FILE.PUT_LINE(v_file, '    </table>');
+        UTL_FILE.PUT_LINE(v_file, '</body>');
+        UTL_FILE.PUT_LINE(v_file, '</html>');
 
         UTL_FILE.FCLOSE(v_file);
 
@@ -153,9 +136,12 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
     ) IS
         v_audit_cursor SYS_REFCURSOR;
     BEGIN
+        -- Directly use the function from the rollback package
         v_audit_cursor := audit_rollback_pkg.get_sorted_audit_records(p_start_timestamp);
         
         write_html_report(v_audit_cursor, p_directory, p_filename);
+        
+        CLOSE v_audit_cursor;
     END generate_dml_report;
 
     PROCEDURE generate_dml_report(
@@ -167,9 +153,12 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
     BEGIN
         v_last_timestamp := get_last_report_timestamp();
         
+        -- Directly use the function from the rollback package
         v_audit_cursor := audit_rollback_pkg.get_sorted_audit_records(v_last_timestamp);
         
         write_html_report(v_audit_cursor, p_directory, p_filename);
+        
+        CLOSE v_audit_cursor;
     END generate_dml_report;
 END audit_report_pkg;
 /

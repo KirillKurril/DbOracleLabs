@@ -8,6 +8,7 @@
             string _format)
         {
                 string[] promtFilePathes = Directory.GetFiles(_sourceDirectory, _format);
+                Console.WriteLine();
                 Console.WriteLine("Select a file");
                 Console.WriteLine("0. Exit program");
                 for (int i = 1; i < promtFilePathes.Length + 1; ++i)

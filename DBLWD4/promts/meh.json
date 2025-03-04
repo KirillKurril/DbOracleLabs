@@ -6,8 +6,7 @@
         "name": "meh_id",
         "type": "NUMBER",
         "constraints": [
-          "PRIMARY KEY",
-          "NOT NULL"
+          "PRIMARY KEY"
         ]
       }
     ]

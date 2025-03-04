@@ -1,7 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace JsonParser
 {
@@ -9,7 +8,6 @@ namespace JsonParser
     {
         DbManager _dbManager;
         string _source = string.Empty;
-        string _query = string.Empty;
         JObject _json;
 
         public Parser(DbManager dbManager)
@@ -18,41 +16,51 @@ namespace JsonParser
         {
             _source = File.ReadAllText(sourcePath);
             _json = JObject.Parse(_source);
+            string response = string.Empty;
+
             switch (_json["queryType"].ToString())
             {
                 case "SELECT":
-                    _query = createSelectQuery(_json);
-                    //_query = Regex.Replace(createSelectQuery(_json), @"\s+", " ").Trim();
-                    return  _dbManager.ExecuteSelectQuery(_query);
+                    var selectQuery = createSelectQuery(_json);
+                    LogQuery(selectQuery);
+                    response =  _dbManager.ExecuteSelectQuery(selectQuery);
+                    break;
 
                 case "CREATE TABLE":
-                    _query = createCreateTableQuery();
-                    //_query = Regex.Replace(createCreateTableQuery(), @"\s+", " ").Trim();
-                    return _dbManager.ExecuteDdlQuery(_query);
+                    var createTableQuery = createCreateTableQuery();
+                    LogQuery(createTableQuery);
+                    response = _dbManager.ExecuteDdlQuery(createTableQuery);
+                    break;
 
                 case "DROP TABLE":
-                    _query = createDropTableQuery();
-                    //_query = Regex.Replace(createDropTableQuery(), @"\s+", " ").Trim();
-                    return _dbManager.ExecuteDdlQuery(_query);
+                    var dropTableQuery = createDropTableQuery();
+                    LogQuery(dropTableQuery);
+                    response = _dbManager.ExecuteDdlQuery(dropTableQuery);
+                    break;
 
                 case "INSERT":
-                    _query = createInsertQuery();
-                    //_query = Regex.Replace(createInsertQuery(), @"\s+", " ").Trim();
-                    return _dbManager.ExecuteDmlQuery(_query);
+                    var insertQuery = createInsertQuery();
+                    LogQuery(insertQuery);
+                    response = _dbManager.ExecuteDmlQuery(insertQuery);
+                    break;
 
                 case "UPDATE":
-                    _query = createUpdateQuery();
-                    //_query = Regex.Replace(createUpdateQuery(), @"\s+", " ").Trim();
-                    return _dbManager.ExecuteDmlQuery(_query);
+                    var updateQuery = createUpdateQuery();
+                    LogQuery(updateQuery);
+                    response = _dbManager.ExecuteDmlQuery(updateQuery);
+                    break;
 
                 case "DELETE":
-                    _query = createDeleteQuery();
-                    //_query = Regex.Replace(createDeleteQuery(), @"\s+", " ").Trim();
-                    return _dbManager.ExecuteDmlQuery(_query);
+                    var deleteQuery = createDeleteQuery();
+                    LogQuery(deleteQuery);
+                    response = _dbManager.ExecuteDmlQuery(deleteQuery);
+                    break;
 
                 default:
-                    return "Wrong promt file format!";
+                    response = "Wrong promt file format!";
+                    break;
             }
+            return response;
         }
 
         private string BuildWhereClause(JObject whereJson)
@@ -98,8 +106,9 @@ namespace JsonParser
 
             return string.Join(" ", whereClauses);
         }
-        private string createCreateTableQuery()
+        private List<string> createCreateTableQuery()
         {
+            List<string> queries = new();
             var queryBuilder = new StringBuilder();
             queryBuilder.Append("CREATE TABLE ");
 
@@ -133,30 +142,37 @@ namespace JsonParser
                 var constraints = _json["constraints"].ToObject<List<string>>();
                 queryBuilder.Append(string.Join(", \n", constraints));
             }
-
-            queryBuilder.Append(");\n\n");
+            queryBuilder.Append(")");
+            queries.Add(queryBuilder.ToString());
+            queryBuilder.Clear();
 
 
             if (_json["primaryKey"] != null)
             {
-                queryBuilder.AppendLine();
-                queryBuilder.Append($"CREATE SEQUENCE seq_{tableName}_{_json["primaryKey"].ToString()} START WITH 1 INCREMENT BY 1;\n");
+                queryBuilder.Append($"CREATE SEQUENCE seq_{tableName}_{_json["primaryKey"].ToString()} START WITH 1 INCREMENT BY 1");
 
-                queryBuilder.AppendLine();
+                queries.Add(queryBuilder.ToString());
+                queryBuilder.Clear();
+
                 queryBuilder.Append(
                     $"CREATE OR REPLACE TRIGGER {tableName}_pk_trigger \n" +
                     $"BEFORE INSERT ON {tableName} \n" +
                     $"FOR EACH ROW \n" +
                     $"BEGIN \n" +
                     $"    :NEW.{_json["primaryKey"].ToString()} := seq_{tableName}_{_json["primaryKey"].ToString()}.NEXTVAL;\n" +
-                    $"END;\n");
+                    $"END;");
+
+                queries.Add(queryBuilder.ToString());
+                queryBuilder.Clear();
             }
 
-            return queryBuilder.ToString();
+            return queries;
         }
-        private string createDropTableQuery()
+        private List<string> createDropTableQuery()
         {
+            List<string> queries = new();
             var queryBuilder = new StringBuilder();
+
             queryBuilder.Append("DROP TABLE ");
 
             var tableName = _json["table"].ToString();
@@ -167,21 +183,20 @@ namespace JsonParser
                 queryBuilder.Append(" CASCADE CONSTRAINTS");
             }
 
-            queryBuilder.Append(";\n");
+            queries.Add(queryBuilder.ToString());
+            queryBuilder.Clear();
 
             if (_json["removeTrigger"] != null && (bool)_json["removeTrigger"])
             {
                 var primaryKeyColumn = _json["primaryKey"].ToString();
 
-                queryBuilder.AppendLine();
-                queryBuilder.Append($"DROP SEQUENCE seq_{tableName}_{primaryKeyColumn};\n");
+                queryBuilder.Append($"DROP SEQUENCE seq_{tableName}_{primaryKeyColumn}\n");
 
-                //queryBuilder.AppendLine();
-                //queryBuilder.Append($"DROP TRIGGER IF EXISTS {tableName}_pk_trigger;\n");
-
+                queries.Add(queryBuilder.ToString());
+                queryBuilder.Clear();
             }
 
-            return queryBuilder.ToString();
+            return queries;
         }
 
         private string createDeleteQuery()
@@ -197,7 +212,6 @@ namespace JsonParser
             {
                 queryBuilder.Append(" WHERE " + BuildWhereClause((JObject)_json["where"]));
             }
-
             return queryBuilder.ToString();
         }
         private string createInsertQuery()
@@ -291,32 +305,36 @@ namespace JsonParser
 
             var tables = json["tables"].ToObject<List<JObject>>();
             queryBuilder.Append(" FROM " + string.Join(", ", tables.Select(t => $"{t["tableName"]} AS {t["alias"]}")));
-            queryBuilder.AppendLine();
 
             if (json["joins"] != null)
             {
+                queryBuilder.AppendLine();
+
                 foreach (var join in json["joins"])
                 {
                     queryBuilder.Append($" {join["type"]} {join["tableName"]} AS {join["alias"]} ON {join["on"]}");
                 }
-                queryBuilder.AppendLine();
             }
 
             if (json["where"] != null)
             {
-                queryBuilder.Append(" WHERE " + BuildWhereClause((JObject)json["where"]));
                 queryBuilder.AppendLine();
+
+                queryBuilder.Append(" WHERE " + BuildWhereClause((JObject)json["where"]));
             }
 
             if (json["groupBy"] != null)
             {
+                queryBuilder.AppendLine();
+
                 var groupByColumns = json["groupBy"].ToObject<List<string>>();
                 queryBuilder.Append(" GROUP BY " + string.Join(", ", groupByColumns));
-                queryBuilder.AppendLine();
             }
 
             if (json["having"] != null)
             {
+                queryBuilder.AppendLine();
+
                 var havingConditions = json["having"]["conditions"].ToObject<List<JObject>>();
                 if (havingConditions.Count > 0)
                 {
@@ -329,11 +347,12 @@ namespace JsonParser
                     }
                     queryBuilder.Append(string.Join(" AND ", havingClauses));
                 }
-                queryBuilder.AppendLine();
             }
 
             if (json["orderBy"] != null)
             {
+                queryBuilder.AppendLine();
+
                 var orderByColumns = json["orderBy"].ToObject<List<JObject>>();
                 var orderByClauses = new List<string>();
                 foreach (var order in orderByColumns)
@@ -341,9 +360,20 @@ namespace JsonParser
                     orderByClauses.Add($"{order["column"]} {order["direction"]}");
                 }
                 queryBuilder.Append(" ORDER BY " + string.Join(", ", orderByClauses));
-                queryBuilder.AppendLine();
             }
             return queryBuilder.ToString();
+        }
+
+        private void LogQuery(List<string> queries)
+        {
+            var path = @"D:\uni\DbOracleLabs\DBLWD4\log.txt";
+            File.WriteAllTextAsync(path, string.Join("\n", queries));
+        }
+
+        private void LogQuery(string query)
+        {
+            var path = @"D:\uni\DbOracleLabs\DBLWD4\log.txt";
+            File.WriteAllTextAsync(path, query);
         }
     }
 }

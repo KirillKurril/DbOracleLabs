@@ -1,6 +1,6 @@
 {
   "queryType": "INSERT",
   "table": "clients",
-  "columns": ["client_id", "client_name", "contact_email", "contact_phone", "address"],
-  "values": [2, "Acme Corp", "contact@acme.com", "123-456-7890", "123 Acme St, City, Country"]
+  "columns": ["client_name", "contact_email", "contact_phone", "address"],
+  "values": ["Acme Corp", "contact@acme.com", "123-456-7890", "123 Acme St, City, Country"]
 }

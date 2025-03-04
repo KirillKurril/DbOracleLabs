@@ -87,14 +87,14 @@ namespace JsonParser
             }
         }
 
-        public string ExecuteSelectQuery(string sql)
+        public string ExecuteSelectQuery(string query)
         {
-            Console.WriteLine(sql);
+            Console.WriteLine(query);
 
             try
             {
                 OpenConnection();
-                using (var command = new OracleCommand(sql, _connection))
+                using (var command = new OracleCommand(query, _connection))
                 {
                     using (var reader = command.ExecuteReader())
                     {
@@ -124,22 +124,34 @@ namespace JsonParser
             }
         }
 
-        public string ExecuteDmlQuery(string sql)
+        public string ExecuteDdlQuery(List<string> queries)
         {
-            Console.WriteLine(sql);
 
             try
             {
                 OpenConnection();
-                using (var command = new OracleCommand(sql, _connection))
+
+                foreach (var query in queries)
                 {
-                    command.ExecuteNonQuery();
-                    return "DML query executed successfully";
+                    Console.WriteLine(query);
+
+                    using (var command = new OracleCommand(query, _connection))
+                    {
+                        try
+                        {
+                            command.ExecuteNonQuery(); 
+                        }
+                        catch (OracleException ex)
+                        {
+                            return ("DDL error: " + ex.Message);
+                        }
+                    }
                 }
+                return ("DDL query executed successfully\n");
             }
             catch (Exception ex)
             {
-                return "DML query execution error: " + ex.Message;
+                return "DDL query execution error: " + ex.Message;
             }
             finally
             {
@@ -147,22 +159,34 @@ namespace JsonParser
             }
         }
 
-        public string ExecuteDdlQuery(string sql)
+        public string ExecuteDmlQuery(string query)
         {
-            Console.WriteLine(sql);
-
             try
             {
+                Console.WriteLine(query);
+
                 OpenConnection();
-                using (var command = new OracleCommand(sql, _connection))
+
+                int affectedLinesNumber = 0;
+
+                using (var command = new OracleCommand(query, _connection))
                 {
-                    int affectedLinesNumber = command.ExecuteNonQuery();
-                    return $"DDL query executed successfully\n {affectedLinesNumber} lines affected";
+                    try
+                    {
+                        affectedLinesNumber = command.ExecuteNonQuery();
+                    }
+                    catch (OracleException ex)
+                    {
+                        return ("DML error: " + ex.Message);
+                    }
                 }
+
+                return $"DML query executed successfully\n {affectedLinesNumber} lines affected";
+
             }
             catch (Exception ex)
             {
-                return("DDL query execution error: " + ex.Message);
+                return("DML query execution error: " + ex.Message);
             }
             finally
             {

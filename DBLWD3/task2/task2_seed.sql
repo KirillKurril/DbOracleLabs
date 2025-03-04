@@ -44,11 +44,11 @@ BEGIN
 END;
 /
 
-CREATE OR REPLACE PROCEDURE C##DEV.update_salary(p_emp_id NUMBER, p_new_salary NUMBER) AS
-BEGIN
-    UPDATE C##DEV.SALARIES SET salary = p_new_salary WHERE employee_id = p_emp_id;
-END;
-/
+-- CREATE OR REPLACE PROCEDURE C##DEV.update_salary(p_emp_id NUMBER, p_new_salary NUMBER) AS
+-- BEGIN
+--     UPDATE C##DEV.SALARIES SET salary = p_new_salary WHERE employee_id = p_emp_id;
+-- END;
+-- /
 
 CREATE OR REPLACE PROCEDURE C##DEV.calculate_salary_bonus(p_emp_id NUMBER) AS
     v_salary NUMBER;

@@ -97,7 +97,11 @@ namespace JsonParser
                     if (tokenValue.Type == JTokenType.String)
                     {
                         string strValue = tokenValue.ToString();
-                        if (DateTime.TryParse(strValue, out _))
+                        if (strValue.Contains("."))
+                        {
+                            value = strValue;
+                        }                        
+                        else if (DateTime.TryParse(strValue, out _))
                             value = $"TO_DATE('{strValue}', 'YYYY-MM-DD')";
                         else
                             value = $"'{strValue}'"; 

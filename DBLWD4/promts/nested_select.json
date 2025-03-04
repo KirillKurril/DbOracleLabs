@@ -26,7 +26,7 @@
                           {
                               "column": "c.client_name",
                               "operator": "LIKE",
-                              "value": "'Client%'"
+                              "value": "Client%"
                           }
                       ]
                   }

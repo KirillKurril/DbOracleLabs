@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Data;
+using System.Data.Common;
 using System.Text;
 
 namespace JsonParser
@@ -75,7 +76,14 @@ namespace JsonParser
                     whereClauses.Add($"{condition["logicalOperator"]} ");
                 }
 
-                if (condition["operator"].ToString().Contains("EXIST") || condition["operator"].ToString().Contains("IN"))
+                if (condition["operator"].ToString().Contains("IN"))
+                {
+                    var subquery = (JObject)condition["subquery"]!;
+                    var subqueryString = createSelectQuery(subquery);
+                    whereClauses.Add($"{condition["column"]} {condition["operator"]} ({subqueryString})");
+                }
+
+                else if (condition["operator"].ToString().Contains("EXIST"))
                 {
                     var subquery = (JObject)condition["subquery"]!;
                     var subqueryString = createSelectQuery(subquery);

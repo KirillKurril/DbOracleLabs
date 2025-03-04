@@ -1,6 +1,6 @@
 {
   "queryType": "SELECT",
-  "columns": ["p.project_id", "p.project_name", "c.client_name"],
+  "columns": ["c.client_name", "COUNT(p.project_id) AS project_count"],
   "tables": [
     {
       "tableName": "projects",
@@ -36,7 +36,7 @@
   },
   "orderBy": [
       {
-          "column": "p.project_name",
+          "column": "c.client_name",
           "direction": "ASC"
       }
   ]

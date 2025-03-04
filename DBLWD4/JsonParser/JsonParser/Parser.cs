@@ -90,7 +90,7 @@ namespace JsonParser
                     {
                         string strValue = tokenValue.ToString();
                         if (DateTime.TryParse(strValue, out _))
-                            value = $"'{strValue}'";
+                            value = $"TO_DATE('{strValue}', 'YYYY-MM-DD')";
                         else
                             value = $"'{strValue}'"; 
                     }
@@ -304,7 +304,7 @@ namespace JsonParser
             queryBuilder.AppendLine();
 
             var tables = json["tables"].ToObject<List<JObject>>();
-            queryBuilder.Append(" FROM " + string.Join(", ", tables.Select(t => $"{t["tableName"]} AS {t["alias"]}")));
+            queryBuilder.Append(" FROM " + string.Join(", ", tables.Select(t => $"{t["tableName"]} {t["alias"]}")));
 
             if (json["joins"] != null)
             {
@@ -312,7 +312,7 @@ namespace JsonParser
 
                 foreach (var join in json["joins"])
                 {
-                    queryBuilder.Append($" {join["type"]} {join["tableName"]} AS {join["alias"]} ON {join["on"]}");
+                    queryBuilder.Append($" {join["type"]} {join["tableName"]} {join["alias"]} ON {join["on"]}");
                 }
             }
 

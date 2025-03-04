@@ -1,3 +1,7 @@
-UPDATE clients
- SET contact_email = 'new_email@acme.com', contact_phone = '098-765-4321'
- WHERE client_id = 1
+SELECT c.client_name, COUNT(p.project_id) AS project_count
+ FROM projects p
+ INNER JOIN clients c ON p.client_id = c.client_id
+ WHERE p.start_date >= TO_DATE('2025-01-01', 'YYYY-MM-DD')
+ GROUP BY c.client_name
+ HAVING COUNT(p.project_id) > 2
+ ORDER BY c.client_name ASC

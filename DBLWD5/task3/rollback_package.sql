@@ -175,21 +175,20 @@ END get_sorted_audit_records;
 
             IF v_table_name = 'tracks' THEN
                 IF v_operation_type = 'INSERT' THEN
-                    DELETE FROM artists WHERE artist_id = v_record_id;
-                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted track ' || v_record_id || ' (INSERT operation)');                    
+                    DELETE FROM tracks WHERE track_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted artist ' || v_record_id || ' (INSERT operation)');
                 ELSIF v_operation_type = 'UPDATE' THEN
-                    UPDATE artists 
-                    SET artist_name = v_old_value1, 
-                        country = v_old_value2, 
-                        formed_date = TO_DATE(v_old_value3, 'YYYY-MM-DD')
-                    WHERE artist_id = v_record_id;
-                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored track ' || v_record_id || ' to previous state (UPDATE operation)');                    
+                    UPDATE tracks 
+                    SET track_name = v_old_value1, 
+                        album_id = TO_NUMBER(v_old_value2), 
+                        duration_seconds = TO_NUMBER(v_old_value3)
+                    WHERE track_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored artist ' || v_record_id || ' to previous state (UPDATE operation)');
                 ELSIF v_operation_type = 'DELETE' THEN
-                    INSERT INTO artists (artist_id, artist_name, country, formed_date)
-                    VALUES (v_record_id, v_old_value1, v_old_value2, TO_DATE(v_old_value3, 'YYYY-MM-DD'));
-                     DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted track ' || v_record_id || ' (DELETE operation)');
+                    INSERT INTO tracks (track_id, album_id, track_name, duration_seconds)
+                    VALUES (v_record_id, TO_NUMBER(v_old_value2), v_old_value1, TO_NUMBER(v_old_value3));
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted artist ' || v_record_id || ' (DELETE operation)');
                 END IF;
-            
             ELSIF v_table_name = 'albums' THEN
                 IF v_operation_type = 'INSERT' THEN
                     DELETE FROM albums WHERE album_id = v_record_id;
@@ -208,24 +207,23 @@ END get_sorted_audit_records;
                             TO_DATE(v_old_value3, 'YYYY-MM-DD'), TO_NUMBER(v_old_value4));
                     DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted album ' || v_record_id || ' (DELETE operation)');                            
                 END IF;
-            
             ELSIF v_table_name = 'artists' THEN
                 IF v_operation_type = 'INSERT' THEN
-                    DELETE FROM tracks WHERE track_id = v_record_id;
-                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted artist ' || v_record_id || ' (INSERT operation)');
+                    DELETE FROM artists WHERE artist_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted track ' || v_record_id || ' (INSERT operation)');                    
                 ELSIF v_operation_type = 'UPDATE' THEN
-                    UPDATE tracks 
-                    SET track_name = v_old_value1, 
-                        album_id = TO_NUMBER(v_old_value2), 
-                        duration_seconds = TO_NUMBER(v_old_value3)
-                    WHERE track_id = v_record_id;
-                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored artist ' || v_record_id || ' to previous state (UPDATE operation)');
+                    UPDATE artists 
+                    SET artist_name = v_old_value1, 
+                        country = v_old_value2, 
+                        formed_date = TO_DATE(v_old_value3, 'YYYY-MM-DD')
+                    WHERE artist_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored track ' || v_record_id || ' to previous state (UPDATE operation)');                    
                 ELSIF v_operation_type = 'DELETE' THEN
-                    INSERT INTO tracks (track_id, album_id, track_name, duration_seconds)
-                    VALUES (v_record_id, TO_NUMBER(v_old_value2), v_old_value1, TO_NUMBER(v_old_value3));
-                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted artist ' || v_record_id || ' (DELETE operation)');
-                END IF;
-            END IF;
+                    INSERT INTO artists (artist_id, artist_name, country, formed_date)
+                    VALUES (v_record_id, v_old_value1, v_old_value2, TO_DATE(v_old_value3, 'YYYY-MM-DD'));
+                     DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted track ' || v_record_id || ' (DELETE operation)');
+                END IF;       
+            END IF;            
         END LOOP;
 
         CLOSE v_audit_cursor;

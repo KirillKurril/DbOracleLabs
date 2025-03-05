@@ -1,4 +1,4 @@
-CREATE OR REPLACE TRIGGER trg_audit_tracks
+CREATE OR REPLACE TRIGGER TRACKS_AUDIT_TRIGGER
 AFTER INSERT OR UPDATE OR DELETE ON tracks
 FOR EACH ROW
 BEGIN
@@ -12,6 +12,7 @@ BEGIN
             :NEW.album_id, :NEW.track_name, 
             :NEW.duration_seconds
         );
+        DBMS_OUTPUT.PUT_LINE('Track Insert: ID=' || :NEW.track_id || ', Name=' || :NEW.track_name);
     ELSIF UPDATING THEN
         INSERT INTO audit_tracks (
             audit_id, operation_type, track_id,
@@ -24,6 +25,9 @@ BEGIN
             :OLD.track_name, :NEW.track_name,
             :OLD.duration_seconds, :NEW.duration_seconds
         );
+        DBMS_OUTPUT.PUT_LINE('Track Update: ID=' || :OLD.track_id || 
+            ', Old Name=' || :OLD.track_name || 
+            ', New Name=' || :NEW.track_name);
     ELSIF DELETING THEN
         INSERT INTO audit_tracks (
             audit_id, operation_type, track_id,
@@ -34,6 +38,7 @@ BEGIN
             :OLD.album_id, :OLD.track_name, 
             :OLD.duration_seconds
         );
+        DBMS_OUTPUT.PUT_LINE('Track Delete: ID=' || :OLD.track_id || ', Name=' || :OLD.track_name);
     END IF;
 END;
 /

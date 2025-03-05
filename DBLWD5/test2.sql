@@ -23,18 +23,18 @@ DECLARE
     v_track1_id NUMBER;
     v_track2_id NUMBER;
 BEGIN
+
+    INSERT INTO artists (artist_name, country, formed_date) 
+    VALUES ('Test Rock Band', 'USASUS', DATE '2020-01-01');
+    
+    v_start_timestamp := SYSTIMESTAMP;
+
     INSERT INTO artists (artist_name, country, formed_date) 
     VALUES ('Test Rock Band', 'USA', DATE '2020-01-01')
     RETURNING artist_id INTO v_artist_id;
     
     delay(2);
     
-    UPDATE artists SET country = 'Canada' WHERE artist_id = v_artist_id;
-    
-    --audit_rollback_pkg.rollback_changes(1);
-    
-    delay(2);
-    v_start_timestamp := SYSTIMESTAMP;
     
     INSERT INTO albums (artist_id, album_name, release_date, total_tracks)
     VALUES (v_artist_id, 'First Album', DATE '2021-06-15', 10)
@@ -43,29 +43,12 @@ BEGIN
     delay(2);
     
     INSERT INTO tracks (album_id, track_name, duration_seconds)
-    VALUES (v_album_id, 'Hit Song 1', 240)
-    RETURNING track_id INTO v_track1_id;
-    
-    INSERT INTO tracks (album_id, track_name, duration_seconds)
     VALUES (v_album_id, 'Hit Song 2', 250)
     RETURNING track_id INTO v_track2_id;
     
-    audit_report_pkg.generate_dml_report(); -- 4 inserts 1 update
-    
-    delay(2);
-    
-    UPDATE tracks SET duration_seconds = 260 WHERE track_id = v_track1_id;
-
-    audit_report_pkg.generate_dml_report(); -- 1 update
-    delay(2);
-    
     DELETE FROM tracks WHERE track_id = v_track2_id;
     
-    audit_report_pkg.generate_dml_report(v_start_timestamp); -- 4 inserts 2 updates 1 delete
-    
     audit_rollback_pkg.rollback_changes(v_start_timestamp);
-    
-    audit_report_pkg.generate_dml_report(); -- 1 insert 1 update
     
     DBMS_OUTPUT.PUT_LINE('Artists after rollback');
     FOR r IN (SELECT * FROM artists WHERE artist_id = v_artist_id) LOOP

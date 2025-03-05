@@ -10,6 +10,7 @@ BEGIN
             audit_seq.NEXTVAL, 'INSERT', :NEW.artist_id,
             :NEW.artist_name, :NEW.country, :NEW.formed_date
         );
+        DBMS_OUTPUT.PUT_LINE('Artist Insert: ID=' || :NEW.artist_id || ', Name=' || :NEW.artist_name);
     ELSIF UPDATING THEN
         INSERT INTO audit_artists (
             audit_id, operation_type, artist_id,
@@ -22,6 +23,9 @@ BEGIN
             :OLD.country, :NEW.country,
             :OLD.formed_date, :NEW.formed_date
         );
+        DBMS_OUTPUT.PUT_LINE('Artist Update: ID=' || :OLD.artist_id || 
+            ', Old Name=' || :OLD.artist_name || 
+            ', New Name=' || :NEW.artist_name);
     ELSIF DELETING THEN
         INSERT INTO audit_artists (
             audit_id, operation_type, artist_id,
@@ -30,6 +34,7 @@ BEGIN
             audit_seq.NEXTVAL, 'DELETE', :OLD.artist_id,
             :OLD.artist_name, :OLD.country, :OLD.formed_date
         );
+        DBMS_OUTPUT.PUT_LINE('Artist Delete: ID=' || :OLD.artist_id || ', Name=' || :OLD.artist_name);
     END IF;
 END;
 /

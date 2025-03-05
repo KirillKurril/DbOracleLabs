@@ -19,17 +19,3 @@ EXCEPTION
 END;
 /
 
-BEGIN
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_artists_autoid';
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_albums_autoid';
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_tracks_autoid';
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_audit_artists';
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_audit_albums';
-    EXECUTE IMMEDIATE 'DROP TRIGGER trg_audit_tracks';
-EXCEPTION
-    WHEN OTHERS THEN
-        IF SQLCODE != -4080 THEN
-            RAISE;
-        END IF;
-END;
-/

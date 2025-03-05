@@ -4,7 +4,7 @@ CREATE OR REPLACE PACKAGE audit_rollback_pkg AS
     );
     
     PROCEDURE rollback_changes(
-        p_milliseconds IN NUMBER
+        p_seconds IN NUMBER
     );
 
     FUNCTION get_sorted_audit_records(
@@ -30,12 +30,26 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
 
     TYPE audit_record_table IS TABLE OF audit_record;
 
-    FUNCTION get_sorted_audit_records(
-        p_target_timestamp IN TIMESTAMP
-    ) RETURN SYS_REFCURSOR IS
-        v_result SYS_REFCURSOR;
-    BEGIN
-        OPEN v_result FOR
+FUNCTION get_sorted_audit_records(
+    p_target_timestamp IN TIMESTAMP
+) RETURN SYS_REFCURSOR IS
+    v_result SYS_REFCURSOR;
+BEGIN
+    OPEN v_result FOR
+        SELECT 
+            table_name, 
+            record_id, 
+            operation_type, 
+            operation_timestamp,
+            old_value1, 
+            new_value1,
+            old_value2, 
+            new_value2,
+            old_value3, 
+            new_value3,
+            old_value4,
+            new_value4
+        FROM (
             SELECT 
                 'artists' AS table_name, 
                 artist_id AS record_id, 
@@ -50,7 +64,7 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
                 NULL AS old_value4,
                 NULL AS new_value4
             FROM audit_artists
-            WHERE operation_timestamp >= p_target_timestamp
+            WHERE operation_timestamp > p_target_timestamp
 
             UNION ALL
 
@@ -68,7 +82,7 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
                 TO_CHAR(old_total_tracks) AS old_value4,
                 TO_CHAR(new_total_tracks) AS new_value4
             FROM audit_albums
-            WHERE operation_timestamp >= p_target_timestamp
+            WHERE operation_timestamp > p_target_timestamp
 
             UNION ALL
 
@@ -86,11 +100,12 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
                 NULL AS old_value4,
                 NULL AS new_value4
             FROM audit_tracks
-            WHERE operation_timestamp >= p_target_timestamp
-            ORDER BY operation_timestamp;       
+            WHERE operation_timestamp > p_target_timestamp
+        )
+        ORDER BY operation_timestamp DESC;       
 
-        RETURN v_result;
-    END get_sorted_audit_records;
+    RETURN v_result;
+END get_sorted_audit_records;
 
     PROCEDURE disable_audit_triggers IS
     BEGIN
@@ -111,14 +126,17 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
     ) IS
     BEGIN
         DELETE FROM audit_artists 
-        WHERE operation_timestamp >= p_target_timestamp;
+        WHERE operation_timestamp > p_target_timestamp;
         
         DELETE FROM audit_albums 
-        WHERE operation_timestamp >= p_target_timestamp;
+        WHERE operation_timestamp > p_target_timestamp;
         
         DELETE FROM audit_tracks 
-        WHERE operation_timestamp >= p_target_timestamp;
+        WHERE operation_timestamp > p_target_timestamp;
         
+        DELETE FROM report_timestamps
+        WHERE report_timestamp > p_target_timestamp;
+
         COMMIT;
     END cleanup_audit_records;
 
@@ -155,23 +173,27 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
             
             EXIT WHEN v_audit_cursor%NOTFOUND;
 
-            IF v_table_name = 'artists' THEN
+            IF v_table_name = 'tracks' THEN
                 IF v_operation_type = 'INSERT' THEN
                     DELETE FROM artists WHERE artist_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted track ' || v_record_id || ' (INSERT operation)');                    
                 ELSIF v_operation_type = 'UPDATE' THEN
                     UPDATE artists 
                     SET artist_name = v_old_value1, 
                         country = v_old_value2, 
                         formed_date = TO_DATE(v_old_value3, 'YYYY-MM-DD')
                     WHERE artist_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored track ' || v_record_id || ' to previous state (UPDATE operation)');                    
                 ELSIF v_operation_type = 'DELETE' THEN
                     INSERT INTO artists (artist_id, artist_name, country, formed_date)
                     VALUES (v_record_id, v_old_value1, v_old_value2, TO_DATE(v_old_value3, 'YYYY-MM-DD'));
+                     DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted track ' || v_record_id || ' (DELETE operation)');
                 END IF;
             
             ELSIF v_table_name = 'albums' THEN
                 IF v_operation_type = 'INSERT' THEN
                     DELETE FROM albums WHERE album_id = v_record_id;
+                     DBMS_OUTPUT.PUT_LINE('Rollback: Deleted album ' || v_record_id || ' (INSERT operation)');
                 ELSIF v_operation_type = 'UPDATE' THEN
                     UPDATE albums 
                     SET album_name = v_old_value1, 
@@ -179,24 +201,29 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
                         release_date = TO_DATE(v_old_value3, 'YYYY-MM-DD'),
                         total_tracks = TO_NUMBER(v_old_value4)
                     WHERE album_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored album ' || v_record_id || ' to previous state (UPDATE operation)');
                 ELSIF v_operation_type = 'DELETE' THEN
                     INSERT INTO albums (album_id, artist_id, album_name, release_date, total_tracks)
                     VALUES (v_record_id, TO_NUMBER(v_old_value2), v_old_value1, 
                             TO_DATE(v_old_value3, 'YYYY-MM-DD'), TO_NUMBER(v_old_value4));
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted album ' || v_record_id || ' (DELETE operation)');                            
                 END IF;
             
-            ELSIF v_table_name = 'tracks' THEN
+            ELSIF v_table_name = 'artists' THEN
                 IF v_operation_type = 'INSERT' THEN
                     DELETE FROM tracks WHERE track_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Deleted artist ' || v_record_id || ' (INSERT operation)');
                 ELSIF v_operation_type = 'UPDATE' THEN
                     UPDATE tracks 
                     SET track_name = v_old_value1, 
                         album_id = TO_NUMBER(v_old_value2), 
                         duration_seconds = TO_NUMBER(v_old_value3)
                     WHERE track_id = v_record_id;
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored artist ' || v_record_id || ' to previous state (UPDATE operation)');
                 ELSIF v_operation_type = 'DELETE' THEN
                     INSERT INTO tracks (track_id, album_id, track_name, duration_seconds)
                     VALUES (v_record_id, TO_NUMBER(v_old_value2), v_old_value1, TO_NUMBER(v_old_value3));
+                    DBMS_OUTPUT.PUT_LINE('Rollback: Restored deleted artist ' || v_record_id || ' (DELETE operation)');
                 END IF;
             END IF;
         END LOOP;
@@ -204,9 +231,10 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
         CLOSE v_audit_cursor;
 
         cleanup_audit_records(p_target_timestamp);
+        COMMIT;
+
         enable_audit_triggers;
         
-        COMMIT;
     END perform_rollback;
 
     PROCEDURE rollback_changes(
@@ -217,11 +245,11 @@ CREATE OR REPLACE PACKAGE BODY audit_rollback_pkg AS
     END rollback_changes;
     
     PROCEDURE rollback_changes(
-        p_milliseconds IN NUMBER
+        p_seconds IN NUMBER
     ) IS
         v_target_timestamp TIMESTAMP;
     BEGIN
-        v_target_timestamp := SYSTIMESTAMP - INTERVAL '0.001' SECOND * p_milliseconds;
+        v_target_timestamp := SYSTIMESTAMP - INTERVAL '1' SECOND * p_seconds;
         perform_rollback(v_target_timestamp);
     END rollback_changes;
 END audit_rollback_pkg;

@@ -53,8 +53,11 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
         v_old_value4 VARCHAR2(200);
         v_new_value4 VARCHAR2(200);
         
-        TYPE operation_counts IS TABLE OF NUMBER INDEX BY VARCHAR2(10);
-        v_counts operation_counts;
+        TYPE operation_counts IS TABLE OF NUMBER INDEX BY VARCHAR2(30);
+        v_artists_counts operation_counts;
+        v_albums_counts operation_counts;
+        v_tracks_counts operation_counts;
+
     BEGIN
         IF p_filename IS NULL THEN
             v_filename := 'dml_report_' || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDD_HH24MISS') || '.html';
@@ -84,9 +87,17 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
         UTL_FILE.PUT_LINE(v_file, '            <th>Delete Count</th>');
         UTL_FILE.PUT_LINE(v_file, '        </tr>');
 
-        v_counts('INSERT') := 0;
-        v_counts('UPDATE') := 0;
-        v_counts('DELETE') := 0;
+        v_artists_counts('INSERT') := 0;
+        v_artists_counts('UPDATE') := 0;
+        v_artists_counts('DELETE') := 0;
+
+        v_albums_counts('INSERT') := 0;
+        v_albums_counts('UPDATE') := 0;
+        v_albums_counts('DELETE') := 0;
+
+        v_tracks_counts('INSERT') := 0;
+        v_tracks_counts('UPDATE') := 0;
+        v_tracks_counts('DELETE') := 0;
 
         LOOP
             FETCH p_cursor INTO 
@@ -98,26 +109,33 @@ CREATE OR REPLACE PACKAGE BODY audit_report_pkg AS
             
             EXIT WHEN p_cursor%NOTFOUND;
 
-            v_counts(v_operation_type) := v_counts(v_operation_type) + 1;
+            CASE v_table_name
+                WHEN 'artists' THEN
+                    v_artists_counts(v_operation_type) := v_artists_counts(v_operation_type) + 1;
+                WHEN 'albums' THEN
+                    v_albums_counts(v_operation_type) := v_albums_counts(v_operation_type) + 1;
+                WHEN 'tracks' THEN
+                    v_tracks_counts(v_operation_type) := v_tracks_counts(v_operation_type) + 1;
+            END CASE;
         END LOOP;
 
         UTL_FILE.PUT_LINE(v_file, '        <tr>');
         UTL_FILE.PUT_LINE(v_file, '            <td>Artists</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_artists_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_artists_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_artists_counts('DELETE') || '</td>');
         UTL_FILE.PUT_LINE(v_file, '        </tr>');
         UTL_FILE.PUT_LINE(v_file, '        <tr>');
         UTL_FILE.PUT_LINE(v_file, '            <td>Albums</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_albums_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_albums_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_albums_counts('DELETE') || '</td>');
         UTL_FILE.PUT_LINE(v_file, '        </tr>');
         UTL_FILE.PUT_LINE(v_file, '        <tr>');
         UTL_FILE.PUT_LINE(v_file, '            <td>Tracks</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('INSERT') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('UPDATE') || '</td>');
-        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_counts('DELETE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_tracks_counts('INSERT') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_tracks_counts('UPDATE') || '</td>');
+        UTL_FILE.PUT_LINE(v_file, '            <td>' || v_tracks_counts('DELETE') || '</td>');
         UTL_FILE.PUT_LINE(v_file, '        </tr>');
         UTL_FILE.PUT_LINE(v_file, '    </table>');
         UTL_FILE.PUT_LINE(v_file, '</body>');

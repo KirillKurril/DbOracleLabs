@@ -12,6 +12,7 @@ BEGIN
             :NEW.artist_id, :NEW.album_name, 
             :NEW.release_date, :NEW.total_tracks
         );
+        DBMS_OUTPUT.PUT_LINE('Album Insert: ID=' || :NEW.album_id || ', Name=' || :NEW.album_name);
     ELSIF UPDATING THEN
         INSERT INTO audit_albums (
             audit_id, operation_type, album_id,
@@ -26,6 +27,9 @@ BEGIN
             :OLD.release_date, :NEW.release_date,
             :OLD.total_tracks, :NEW.total_tracks
         );
+        DBMS_OUTPUT.PUT_LINE('Album Update: ID=' || :OLD.album_id || 
+            ', Old Name=' || :OLD.album_name || 
+            ', New Name=' || :NEW.album_name);
     ELSIF DELETING THEN
         INSERT INTO audit_albums (
             audit_id, operation_type, album_id,
@@ -36,6 +40,7 @@ BEGIN
             :OLD.artist_id, :OLD.album_name, 
             :OLD.release_date, :OLD.total_tracks
         );
+        DBMS_OUTPUT.PUT_LINE('Album Delete: ID=' || :OLD.album_id || ', Name=' || :OLD.album_name);
     END IF;
 END;
 /

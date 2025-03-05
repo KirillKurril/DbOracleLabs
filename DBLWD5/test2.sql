@@ -51,17 +51,17 @@ BEGIN
     audit_rollback_pkg.rollback_changes(v_start_timestamp);
     
     DBMS_OUTPUT.PUT_LINE('Artists after rollback');
-    FOR r IN (SELECT * FROM artists WHERE artist_id = v_artist_id) LOOP
+    FOR r IN (SELECT * FROM artists) LOOP
         DBMS_OUTPUT.PUT_LINE('Artist: ' || r.artist_name || ', Country: ' || r.country);
     END LOOP;
     
     DBMS_OUTPUT.PUT_LINE('Albums after rollback');
-    FOR r IN (SELECT * FROM albums WHERE artist_id = v_artist_id) LOOP
+    FOR r IN (SELECT * FROM albums) LOOP
         DBMS_OUTPUT.PUT_LINE('Album: ' || r.album_name || ', Tracks: ' || r.total_tracks);
     END LOOP;
     
     DBMS_OUTPUT.PUT_LINE('Tracks after rollback');
-    FOR r IN (SELECT * FROM tracks WHERE album_id = v_album_id) LOOP
+    FOR r IN (SELECT * FROM tracks) LOOP
         DBMS_OUTPUT.PUT_LINE('Track: ' || r.track_name || ', Duration: ' || r.duration_seconds);
     END LOOP;
 END;

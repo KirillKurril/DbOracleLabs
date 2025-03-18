@@ -1,5 +1,2 @@
-SELECT project_id, project_name
- FROM projects p
- WHERE p.client_id IN (SELECT client_id
- FROM clients c
- WHERE c.client_name LIKE 'Client%')
+DELETE FROM projects
+ WHERE project_id = 1

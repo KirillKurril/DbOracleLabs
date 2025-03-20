@@ -1,0 +1,14 @@
+{
+    "queryType": "CREATE TABLE",
+    "table": "meh",
+    "columns": [
+      {
+        "name": "meh_id",
+        "type": "NUMBER",
+        "constraints": [
+          "PRIMARY KEY"
+        ]
+      }
+    ]
+}
+  

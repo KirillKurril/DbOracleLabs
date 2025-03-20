@@ -1,0 +1,7 @@
+{
+    "queryType": "DROP TABLE",
+    "table": "projects",
+    "removeConstraints": true,
+    "removeTrigger": true,
+    "primaryKey": "project_id"
+}

@@ -1,0 +1,43 @@
+{
+  "queryType": "SELECT",
+  "columns": ["c.client_name", "COUNT(p.project_id) AS project_count"],
+  "tables": [
+    {
+      "tableName": "projects",
+      "alias": "p"
+    }
+  ],
+  "joins": [
+    {
+      "type": "INNER JOIN",
+      "tableName": "clients",
+      "alias": "c",
+      "on": "p.client_id = c.client_id"
+    }
+  ],
+  "where": {
+    "conditions": [
+      {
+        "column": "p.start_date",
+        "operator": ">=",
+        "value": "2025-01-01"
+      }
+    ]
+  },
+  "groupBy": ["c.client_name"],
+  "having": {
+      "conditions": [
+          {
+              "column": "COUNT(p.project_id)",
+              "operator": ">",
+              "value": 2
+          }
+      ]
+  },
+  "orderBy": [
+      {
+          "column": "c.client_name",
+          "direction": "ASC"
+      }
+  ]
+}

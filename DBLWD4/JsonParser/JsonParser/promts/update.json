@@ -1,0 +1,17 @@
+{
+  "queryType": "UPDATE",
+  "table": "clients",
+  "set": {
+    "contact_email": "new_email@acme.com",
+    "contact_phone": "098-765-4321"
+  },
+  "where": {
+    "conditions": [
+      {
+        "column": "client_id",
+        "operator": "=",
+        "value": 1
+      }
+    ]
+  }
+}

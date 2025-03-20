@@ -1,0 +1,37 @@
+{
+  "queryType": "SELECT",
+  "columns": ["project_id", "project_name"],
+  "tables": [
+      {
+          "tableName": "projects",
+          "alias": "p"
+      }
+  ],
+  "where": {
+      "conditions": [
+          {
+              "column": "p.client_id",
+              "operator": "IN",
+              "subquery": {
+                  "queryType": "SELECT",
+                  "columns": ["client_id"],
+                  "tables": [
+                      {
+                          "tableName": "clients",
+                          "alias": "c"
+                      }
+                  ],
+                  "where": {
+                      "conditions": [
+                          {
+                              "column": "c.client_name",
+                              "operator": "LIKE",
+                              "value": "Client%"
+                          }
+                      ]
+                  }
+              }
+          }
+      ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+    "queryType": "CREATE TABLE",
+    "table": "clients",
+    "columns": [
+      {
+        "name": "client_id",
+        "type": "NUMBER",
+        "constraints": [
+          "PRIMARY KEY",
+          "NOT NULL"
+        ]
+      },
+      {
+        "name": "client_name",
+        "type": "VARCHAR2(100)",
+        "constraints": [
+          "NOT NULL"
+        ]
+      },
+      {
+        "name": "contact_email",
+        "type": "VARCHAR2(100)",
+        "constraints": [
+          "NOT NULL"
+        ]
+      },
+      {
+        "name": "contact_phone",
+        "type": "VARCHAR2(20)",
+        "constraints": []
+      },
+      {
+        "name": "address",
+        "type": "VARCHAR2(200)",
+        "constraints": []
+      }
+    ],
+    "constraints": [
+      "UNIQUE (client_name)"
+    ],
+    "primaryKey": "client_id"
+  }
+  

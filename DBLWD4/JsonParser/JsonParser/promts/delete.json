@@ -1,0 +1,14 @@
+{
+    "queryType": "DELETE",
+    "table": "projects",
+    "where": {
+      "conditions": [
+        {
+          "column": "project_id",
+          "operator": "=",
+          "value": 1
+        }
+      ]
+    }
+  }
+  

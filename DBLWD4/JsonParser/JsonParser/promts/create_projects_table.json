@@ -1,0 +1,43 @@
+{
+  "queryType": "CREATE TABLE",
+  "table": "projects",
+  "columns": [
+    {
+      "name": "project_id",
+      "type": "NUMBER",
+      "constraints": [
+        "PRIMARY KEY",
+        "NOT NULL"
+      ]
+    },
+    {
+      "name": "project_name",
+      "type": "VARCHAR2(100)",
+      "constraints": [
+        "NOT NULL"
+      ]
+    },
+    {
+      "name": "start_date",
+      "type": "DATE",
+      "constraints": []
+    },
+    {
+      "name": "end_date",
+      "type": "DATE",
+      "constraints": []
+    },
+    {
+      "name": "client_id",
+      "type": "NUMBER",
+      "constraints": [
+        "NOT NULL"
+      ]
+    }
+  ],
+  "constraints": [
+    "UNIQUE (project_name)",
+    "FOREIGN KEY (client_id) REFERENCES clients(client_id)"
+  ],
+  "primaryKey": "project_id"
+}

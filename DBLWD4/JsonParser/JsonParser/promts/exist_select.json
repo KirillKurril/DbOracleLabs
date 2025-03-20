@@ -1,0 +1,42 @@
+{
+  "queryType": "SELECT",
+  "columns": ["project_id", "project_name", "start_date", "end_date"],
+  "tables": [
+      {
+          "tableName": "projects",
+          "alias": "p"
+      }
+  ],
+  "where": {
+      "conditions": [
+          {
+              "column": "p.client_id",
+              "operator": "=",
+              "value": "123"
+          },
+          {
+              "logicalOperator": "AND",
+              "operator": "EXISTS",
+              "subquery": {
+                  "queryType": "SELECT",
+                  "columns": ["client_id"],
+                  "tables": [
+                      {
+                          "tableName": "clients",
+                          "alias": "c"
+                      }
+                  ],
+                  "where": {
+                      "conditions": [
+                          {
+                              "column": "c.client_id",
+                              "operator": "=",
+                              "value": "p.client_id"
+                          }
+                      ]
+                  }
+              }
+          }
+      ]
+  }
+}
